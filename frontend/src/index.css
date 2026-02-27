@@ -2,44 +2,284 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════
+   Apple Human Interface Guidelines — Design System
+   ═══════════════════════════════════════════════════════════ */
+
 @layer base {
+  :root {
+    --apple-blue:       #0071E3;
+    --apple-blue-hover: #0077ED;
+    --apple-bg:         #F5F5F7;
+    --apple-bg-2:       #FFFFFF;
+    --apple-label-1:    #1D1D1F;
+    --apple-label-2:    #6E6E73;
+    --apple-label-3:    #86868B;
+    --apple-separator:  rgba(60,60,67,0.12);
+    --apple-fill:       rgba(120,120,128,0.08);
+    --apple-radius:     12px;
+    --apple-radius-lg:  16px;
+    --apple-radius-xl:  20px;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    background-color: var(--apple-bg);
+    color: var(--apple-label-1);
+    @apply antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+  }
+
+  /* Apple-thin scrollbar */
+  ::-webkit-scrollbar         { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track   { background: transparent; }
+  ::-webkit-scrollbar-thumb   { background: rgba(0,0,0,0.14); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+
+  /* Focus — Apple blue glow */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0,113,227,0.28);
+    border-radius: var(--apple-radius);
   }
 }
 
 @layer components {
+
+  /* ── Inputs ──────────────────────────────────────────────
+     Apple-style: clean white fill, thin separator border
+     ───────────────────────────────────────────────────── */
   .input {
-    @apply block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm
-           focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500
-           disabled:bg-gray-100 disabled:cursor-not-allowed;
+    display: block;
+    width: 100%;
+    padding: 9px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--apple-label-1);
+    background: #FFFFFF;
+    border: 1px solid rgba(60,60,67,0.2);
+    border-radius: var(--apple-radius);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) inset;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    -webkit-appearance: none;
   }
+  .input::placeholder { color: #AEAEB2; }
+  .input:focus {
+    outline: none;
+    border-color: var(--apple-blue);
+    box-shadow: 0 0 0 4px rgba(0,113,227,0.18), 0 1px 2px rgba(0,0,0,0.04) inset;
+  }
+  .input:disabled {
+    background: rgba(120,120,128,0.06);
+    color: #AEAEB2;
+    cursor: not-allowed;
+  }
+
+  /* ── Labels ──────────────────────────────────────────────
+     Apple secondary label — small, medium weight
+     ───────────────────────────────────────────────────── */
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--apple-label-2);
+    margin-bottom: 6px;
+    letter-spacing: -0.005em;
   }
+
+  /* ── Buttons ──────────────────────────────────────────────
+     Apple-style: gradient fill, soft shadow, smooth hover
+     ───────────────────────────────────────────────────── */
   .btn {
-    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
-           transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border-radius: var(--apple-radius);
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    white-space: nowrap;
+    text-decoration: none;
   }
+  .btn:disabled { opacity: 0.40; cursor: not-allowed; }
+  .btn:focus { outline: none; }
+  .btn:focus-visible { box-shadow: 0 0 0 4px rgba(0,113,227,0.28); }
+
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+    color: #FFFFFF;
+    background: linear-gradient(180deg, #147CE5 0%, #0071E3 55%, #006AD6 100%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 1px 3px rgba(0,113,227,0.30),
+      0 1px 2px rgba(0,0,0,0.10);
   }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, #1885F0 0%, #0077ED 55%, #006FE0 100%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 4px 12px rgba(0,113,227,0.38),
+      0 1px 2px rgba(0,0,0,0.10);
+    transform: translateY(-0.5px);
+  }
+  .btn-primary:active:not(:disabled) {
+    background: linear-gradient(180deg, #0068D0 0%, #005FC0 100%);
+    box-shadow: 0 1px 3px rgba(0,113,227,0.20), inset 0 1px 3px rgba(0,0,0,0.10);
+    transform: scale(0.975);
+  }
+
   .btn-secondary {
-    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500;
+    color: var(--apple-label-1);
+    background: #FFFFFF;
+    border: 1px solid rgba(60,60,67,0.18);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.9) inset,
+      0 1px 3px rgba(0,0,0,0.06);
   }
+  .btn-secondary:hover:not(:disabled) {
+    background: #F5F5F7;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.9) inset,
+      0 3px 8px rgba(0,0,0,0.09);
+    transform: translateY(-0.5px);
+  }
+  .btn-secondary:active:not(:disabled) {
+    background: #EBEBEB;
+    transform: scale(0.975);
+  }
+
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+    color: #FFFFFF;
+    background: linear-gradient(180deg, #FF3D3D 0%, #E8252A 55%, #D91F24 100%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 1px 3px rgba(220,38,38,0.30),
+      0 1px 2px rgba(0,0,0,0.10);
   }
+  .btn-danger:hover:not(:disabled) {
+    background: linear-gradient(180deg, #FF4A4A 0%, #F02D32 55%, #E0282D 100%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 4px 12px rgba(220,38,38,0.38);
+    transform: translateY(-0.5px);
+  }
+  .btn-danger:active:not(:disabled) {
+    transform: scale(0.975);
+  }
+
   .btn-sm {
-    @apply px-3 py-1.5 text-xs;
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 8px;
   }
+
+  /* ── Cards ────────────────────────────────────────────────
+     Apple-style: white, 16px radius, ultra-soft shadow
+     ───────────────────────────────────────────────────── */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+    background: #FFFFFF;
+    border-radius: var(--apple-radius-lg);
+    border: 1px solid rgba(0,0,0,0.07);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05);
+    padding: 24px;
   }
+
+  /* ── Badges ───────────────────────────────────────────────
+     Pill-shaped, Apple-like semantic colors
+     ───────────────────────────────────────────────────── */
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 20px;
+    letter-spacing: -0.005em;
   }
+
+  /* ── Table ─────────────────────────────────────────────── */
   .table-cell {
-    @apply px-4 py-3 text-sm;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  /* ── Page header ──────────────────────────────────────────
+     Frosted glass — macOS toolbar style
+     ───────────────────────────────────────────────────── */
+  .page-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 16px 24px;
+    background: rgba(245,245,247,0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 0.5px solid rgba(0,0,0,0.10);
+  }
+  .page-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--apple-label-1);
+    letter-spacing: -0.022em;
+  }
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--apple-label-2);
+    margin-top: 2px;
+  }
+
+  /* ── Stat cards ───────────────────────────────────────────
+     Compact stat tile
+     ───────────────────────────────────────────────────── */
+  .stat-card {
+    background: #FFFFFF;
+    border-radius: var(--apple-radius-lg);
+    border: 1px solid rgba(0,0,0,0.07);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05);
+    padding: 16px 20px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--apple-label-1);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--apple-label-2);
+    margin-top: 4px;
+  }
+
+  /* ── Section heading ──────────────────────────────────────
+     Apple system label – all caps, secondary color
+     ───────────────────────────────────────────────────── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--apple-label-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Divider ──────────────────────────────────────────────
+     Apple separator — 0.5px, ultra light
+     ───────────────────────────────────────────────────── */
+  .divider {
+    border: none;
+    border-top: 0.5px solid rgba(0,0,0,0.10);
+    margin: 20px 0;
   }
 }

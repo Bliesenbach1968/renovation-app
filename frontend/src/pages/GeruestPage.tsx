@@ -12,7 +12,7 @@ const PHASE_NAMES: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
 };
 
-const GERUEST_TYPES = ['Fassadengerüst', 'Innengerüst', 'Hängegerüst', 'Schutzgerüst', 'Sonstiges'];
+const GERUEST_TYPES = ['Fassadengerüst', 'Innengerüst', 'Hängegerüst', 'Schutzgerüst', 'Traggerüst', 'Raumgerüst', 'Arbeitsgerüst', 'Sonstiges'];
 
 export default function GeruestPage() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -29,7 +29,10 @@ export default function GeruestPage() {
 
   const addMutation = useMutation(
     (body: Partial<Geruest>) => createGeruest(projectId!, body),
-    { onSuccess: () => { qc.invalidateQueries(['gerueste', projectId]); qc.invalidateQueries(['summary', projectId]); setShowForm(false); } }
+    {
+      onSuccess: () => { qc.invalidateQueries(['gerueste', projectId]); qc.invalidateQueries(['summary', projectId]); setShowForm(false); },
+      onError: (err: any) => { alert(err?.response?.data?.message ?? 'Fehler beim Speichern'); },
+    }
   );
 
   const totalCost = gerueste.reduce((sum, g) => sum + g.totalCost, 0);

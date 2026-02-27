@@ -8,6 +8,7 @@ router.use(authenticate);
 
 router.get('/',    authorize('admin'), userController.getUsers);
 router.get('/:id', userController.getUser);
+router.put('/:id/password', authorize('admin'), userController.resetUserPassword);
 router.put('/:id', userController.updateUser);
 router.delete('/:id', authorize('admin'), userController.deactivateUser);
 

@@ -15,6 +15,8 @@ import AdminUsersPage from './pages/AdminUsersPage';
 import AdminTemplatesPage from './pages/AdminTemplatesPage';
 import NewProjectPage from './pages/NewProjectPage';
 import EditProjectPage from './pages/EditProjectPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -31,6 +33,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/forgot-password" element={user ? <Navigate to="/" replace /> : <ForgotPasswordPage />} />
+      <Route path="/reset-password" element={user ? <Navigate to="/" replace /> : <ResetPasswordPage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/"                             element={<DashboardPage />} />
         <Route path="/projects/new"                 element={<NewProjectPage />} />

@@ -138,6 +138,36 @@ exports.updateProject = async (req, res, next) => {
       await project.save();
     }
 
+    // Fehlende Etagen ergänzen wenn etagenOhneKeller oder kellerAnzahl geändert wurde
+    const Floor = require('../models/Floor');
+    const etagenOhneKeller = project.etagenOhneKeller || 0;
+    const kellerAnzahl = project.kellerAnzahl || 0;
+    if (etagenOhneKeller > 0 || kellerAnzahl > 0 || project.tiefgarage) {
+      const existingFloors = await Floor.find({ projectId: project._id, phaseType: null }, 'level');
+      const existingLevels = new Set(existingFloors.map((f) => f.level));
+      const missing = [];
+      // Tiefgarage
+      if (project.tiefgarage && !existingLevels.has(-2)) {
+        missing.push({ level: -2, name: getFloorName(-2), order: -2 });
+      }
+      // Kelleretagen
+      for (let k = 0; k < kellerAnzahl; k++) {
+        const level = -1 - k;
+        if (!existingLevels.has(level)) {
+          missing.push({ level, name: kellerAnzahl === 1 ? 'Keller' : `${k + 1}. Keller`, order: level });
+        }
+      }
+      // Oberirdische Etagen
+      for (let e = 0; e < etagenOhneKeller; e++) {
+        if (!existingLevels.has(e)) {
+          missing.push({ level: e, name: getFloorName(e), order: e });
+        }
+      }
+      if (missing.length > 0) {
+        await Floor.insertMany(missing.map((f) => ({ ...f, projectId: project._id, phaseType: null })));
+      }
+    }
+
     // Wenn Status auf 'active' gesetzt wird, alle Phasen ebenfalls auf 'active' setzen
     if (req.body.status === 'active') {
       await Project.updateOne(

@@ -41,12 +41,32 @@ exports.updateUser = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE /api/v1/users/:id  (Deaktivierung, kein Hard-Delete)
+// PUT /api/v1/users/:id/password  (Admin setzt neues Passwort)
+exports.resetUserPassword = async (req, res, next) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8)
+      return res.status(400).json({ message: 'Passwort muss mindestens 8 Zeichen haben' });
+
+    const user = await User.findById(req.params.id).select('+password');
+    if (!user) return res.status(404).json({ message: 'Nutzer nicht gefunden' });
+
+    user.password = newPassword;
+    await user.save();
+
+    await createAuditLog({ userId: req.user._id, entityType: 'user', entityId: user._id, action: 'update', before: { password: '[gesetzt]' }, after: { password: '[neu gesetzt]' }, req });
+    res.json({ success: true, message: 'Passwort erfolgreich zurückgesetzt' });
+  } catch (err) { next(err); }
+};
+
+// DELETE /api/v1/users/:id  (Hard-Delete)
 exports.deactivateUser = async (req, res, next) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+    if (req.user._id.toString() === req.params.id)
+      return res.status(400).json({ message: 'Sie können sich nicht selbst löschen' });
+    const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ message: 'Nutzer nicht gefunden' });
-    await createAuditLog({ userId: req.user._id, entityType: 'user', entityId: user._id, action: 'delete', before: { isActive: true }, after: { isActive: false }, req });
-    res.json({ success: true, message: 'Nutzer deaktiviert' });
+    await createAuditLog({ userId: req.user._id, entityType: 'user', entityId: user._id, action: 'delete', before: user.toJSON(), after: null, req });
+    res.json({ success: true, message: 'Nutzer gelöscht' });
   } catch (err) { next(err); }
 };

@@ -6,7 +6,7 @@ const geruestSchema = new mongoose.Schema(
     phaseType: { type: String, enum: ['demolition', 'renovation', 'specialConstruction'], default: 'renovation' },
     type: {
       type: String,
-      enum: ['Fassadengerüst', 'Innengerüst', 'Traggerüst', 'Raumgerüst', 'Arbeitsgerüst'],
+      enum: ['Fassadengerüst', 'Innengerüst', 'Hängegerüst', 'Schutzgerüst', 'Traggerüst', 'Raumgerüst', 'Arbeitsgerüst', 'Sonstiges'],
       required: true,
     },
     areaSqm:                { type: Number, required: true, min: 0 }, // Fläche in m²

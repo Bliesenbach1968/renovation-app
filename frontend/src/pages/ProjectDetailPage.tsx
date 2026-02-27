@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useForm, useWatch } from 'react-hook-form';
-import { getProject, updateProject } from '../api/projects';
+import { getProject, updateProject, addTeamMember, removeTeamMember } from '../api/projects';
+import { getUsers } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
 
 const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung',
@@ -12,10 +14,10 @@ const PHASE_LABELS: Record<string, string> = {
 const PHASE_STATUS: Record<string, { label: string; color: string }> = {
   planned:    { label: 'Geplant',       color: 'bg-gray-100 text-gray-700' },
   active:     { label: 'Aktiv',         color: 'bg-green-100 text-green-700' },
-  completed:  { label: 'Abgeschlossen', color: 'bg-blue-100 text-blue-700' },
+  completed:  { label: 'Abgeschlossen', color: 'bg-slate-100 text-slate-600' },
 };
 const PROJECT_STATUS: Record<string, { label: string; color: string }> = {
-  planning:  { label: 'Planung',       color: 'bg-blue-100 text-blue-800' },
+  planning:  { label: 'Planung',       color: 'bg-slate-100 text-slate-700' },
   active:    { label: 'Aktiv',         color: 'bg-green-100 text-green-800' },
   'on-hold': { label: 'Pausiert',      color: 'bg-yellow-100 text-yellow-800' },
   completed: { label: 'Abgeschlossen', color: 'bg-gray-100 text-gray-800' },
@@ -66,7 +68,7 @@ function GebaeudekennzahlenModal({ project, onClose }: { project: any; onClose: 
   );
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 className="font-semibold text-lg mb-4">Gebäudekennzahlen bearbeiten</h3>
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
@@ -126,11 +128,40 @@ function GebaeudekennzahlenModal({ project, onClose }: { project: any; onClose: 
   );
 }
 
+const TEAM_ROLE_LABELS: Record<string, string> = {
+  admin: 'Administrator', projectLeader: 'Projektleiter', calculator: 'Kalkulator',
+  worker: 'Ausführend', external: 'Extern',
+};
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  const qc = useQueryClient();
   const { data: project, isLoading } = useQuery(['project', id], () => getProject(id!));
   const [showEditKennzahlen, setShowEditKennzahlen] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addUserId, setAddUserId] = useState('');
+  const [addRole, setAddRole] = useState('worker');
+
+  const { data: allUsers = [] } = useQuery('users', getUsers, { enabled: isAdmin });
+
+  const addMemberMutation = useMutation(
+    () => addTeamMember(id!, { userId: addUserId, role: addRole }),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries(['project', id]);
+        setShowAddMember(false);
+        setAddUserId('');
+        setAddRole('worker');
+      },
+    }
+  );
+
+  const removeMemberMutation = useMutation(
+    (userId: string) => removeTeamMember(id!, userId),
+    { onSuccess: () => qc.invalidateQueries(['project', id]) }
+  );
 
   if (isLoading) return <div className="p-6"><div className="animate-pulse h-8 w-64 bg-gray-200 rounded mb-4" /></div>;
   if (!project) return <div className="p-6 text-red-600">Projekt nicht gefunden</div>;
@@ -146,7 +177,7 @@ export default function ProjectDetailPage() {
     || project.aussenanlagenVorhanden;
 
   return (
-    <div className="min-h-full bg-sky-50">
+    <div className="min-h-full bg-slate-50">
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
@@ -252,20 +283,86 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="card">
-            <h3 className="font-medium text-gray-900 mb-2">Team ({project.team.length})</h3>
-            <div className="space-y-2">
-              {project.team.slice(0, 5).map((m) => (
-                <div key={m.userId._id} className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">Team ({project.team.length})</h3>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddMember(!showAddMember)}
+                  className="text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded px-2 py-0.5 hover:bg-primary-50 transition-colors"
+                >
+                  + Hinzufügen
+                </button>
+              )}
+            </div>
+
+            {/* Mitglied hinzufügen */}
+            {showAddMember && isAdmin && (
+              <div className="mb-3 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                <div>
+                  <label className="label">Nutzer</label>
+                  <select
+                    value={addUserId}
+                    onChange={(e) => setAddUserId(e.target.value)}
+                    className="input"
+                  >
+                    <option value="">– Nutzer wählen –</option>
+                    {allUsers
+                      .filter((u: any) => !project.team.some((m: any) => m.userId._id === u._id))
+                      .map((u: any) => (
+                        <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Projektrolle</label>
+                  <select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="input">
+                    {Object.entries(TEAM_ROLE_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                {addMemberMutation.isError && (
+                  <p className="text-xs text-red-600">{(addMemberMutation.error as any)?.response?.data?.message || 'Fehler'}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => addMemberMutation.mutate()}
+                    disabled={!addUserId || addMemberMutation.isLoading}
+                    className="btn-primary btn-sm"
+                  >
+                    {addMemberMutation.isLoading ? 'Hinzufügen…' : 'Hinzufügen'}
+                  </button>
+                  <button onClick={() => setShowAddMember(false)} className="btn-secondary btn-sm">Abbrechen</button>
+                </div>
+              </div>
+            )}
+
+            {/* Mitgliederliste */}
+            <div className="space-y-1">
+              {project.team.map((m: any) => (
+                <div key={m.userId._id} className="flex items-center gap-2 py-1 group">
+                  <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold shrink-0">
                     {m.userId.name.charAt(0)}
                   </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">{m.userId.name}</p>
-                    <p className="text-xs text-gray-400">{m.role}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium leading-none truncate">{m.userId.name}</p>
+                    <p className="text-xs text-gray-400">{TEAM_ROLE_LABELS[m.role] || m.role}</p>
                   </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => removeMemberMutation.mutate(m.userId._id)}
+                      disabled={removeMemberMutation.isLoading}
+                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all text-xs px-1"
+                      title="Entfernen"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               ))}
-              {project.team.length > 5 && <p className="text-xs text-gray-400">+{project.team.length - 5} weitere</p>}
+              {project.team.length === 0 && (
+                <p className="text-xs text-gray-400">Noch keine Teammitglieder</p>
+              )}
             </div>
           </div>
 

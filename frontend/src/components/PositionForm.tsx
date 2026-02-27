@@ -13,7 +13,7 @@ const PHASE_LABELS: Record<string, string> = {
 export const BEREICHE_STATIC = ['Treppenhaus', 'Keller', 'Fenster', 'Türen', 'Fassade', 'Außenanlage'];
 export const BEREICHE_ENTKERNUNG_EXTRA = ['Pauschale (externe Arbeiten)'];
 export const AUSSENANLAGE_UNTERPUNKTE = ['Carport', 'Garage', 'Spielplatz'];
-export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Balkone', 'Betonsanierung', 'Kran'];
+export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Balkone', 'Betonsanierung'];
 export const BEREICH_UNTERPUNKTE: Record<string, string[]> = {
   'Fenster': ['Fenster extern', 'Fenster intern'],
   'Türen':   ['Türen extern', 'Türen intern'],
@@ -229,7 +229,7 @@ export default function PositionForm({
   }, {} as Record<string, PositionTemplate[]>);
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h3 className="font-semibold text-lg">{isEdit ? 'Position bearbeiten' : 'Neue Position'}</h3>
@@ -368,7 +368,7 @@ export default function PositionForm({
                   </button>
                   <button type="button"
                     onClick={() => { setValue('category', 'Wand'); setValue('quantity', wallArea); }}
-                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${watchedValues.category === 'Wand' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'}`}>
+                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${watchedValues.category === 'Wand' ? 'bg-slate-500 text-white border-slate-500' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}>
                     Wand ({wallArea} m²)
                   </button>
                 </div>
@@ -390,7 +390,7 @@ export default function PositionForm({
               {(floorArea || wallArea || perimeter) && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {floorArea && <button type="button" onClick={() => setValue('quantity', floorArea)} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 hover:bg-emerald-100">Boden {floorArea} m²</button>}
-                  {wallArea  && <button type="button" onClick={() => setValue('quantity', wallArea)}  className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-100">Wand {wallArea} m²</button>}
+                  {wallArea  && <button type="button" onClick={() => setValue('quantity', wallArea)}  className="text-xs bg-slate-50 text-slate-700 border border-slate-200 rounded px-1.5 py-0.5 hover:bg-slate-100">Wand {wallArea} m²</button>}
                   {perimeter && <button type="button" onClick={() => setValue('quantity', perimeter)} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 hover:bg-amber-100">Umfang {perimeter} lfm</button>}
                 </div>
               )}
@@ -434,13 +434,13 @@ export default function PositionForm({
           </div>
 
           {/* Live-Vorschau */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-blue-900 mb-2">Kostenvorschau</h4>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-slate-800 mb-2">Kostenvorschau</h4>
             <div className="grid grid-cols-4 gap-2 text-sm">
-              <div><p className="text-blue-500 text-xs">Materialkosten</p><p className="font-semibold">{preview.mat.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
-              <div><p className="text-blue-500 text-xs">Entsorgung</p><p className="font-semibold">{preview.dis.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
-              <div><p className="text-blue-500 text-xs">Arbeitskosten</p><p className="font-semibold">{preview.lab.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
-              <div className="bg-blue-100 rounded p-2"><p className="text-blue-600 text-xs">Gesamt</p><p className="font-bold text-blue-900">{preview.total.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+              <div><p className="text-slate-500 text-xs">Materialkosten</p><p className="font-semibold">{preview.mat.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+              <div><p className="text-slate-500 text-xs">Entsorgung</p><p className="font-semibold">{preview.dis.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+              <div><p className="text-slate-500 text-xs">Arbeitskosten</p><p className="font-semibold">{preview.lab.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+              <div className="bg-slate-200 rounded p-2"><p className="text-slate-600 text-xs">Gesamt</p><p className="font-bold text-slate-800">{preview.total.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
             </div>
           </div>
 

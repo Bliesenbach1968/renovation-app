@@ -246,7 +246,7 @@ export default function AdminTemplatesPage() {
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <p className="text-sm font-medium text-gray-900 truncate">{t.name}</p>
                           {t.isSystemDefault
-                            ? <span className="badge bg-blue-50 text-blue-600 text-xs shrink-0">System</span>
+                            ? <span className="badge bg-slate-100 text-slate-600 text-xs shrink-0">System</span>
                             : <span className="badge bg-emerald-50 text-emerald-600 text-xs shrink-0">Eigene</span>
                           }
                           {t.bereich && (

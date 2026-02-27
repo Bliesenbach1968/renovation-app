@@ -27,6 +27,8 @@ const TEMPLATES = [
   { phaseType: 'demolition', category: 'Fenster/Türen', name: 'Fenster ausbauen', unit: 'Stück', materialCostPerUnit: 0, disposalCostPerUnit: 30, laborHoursPerUnit: 1, laborHourlyRate: 45, isSystemDefault: true },
   { phaseType: 'demolition', category: 'Fenster/Türen', name: 'Türen und Zargen ausbauen', unit: 'Stück', materialCostPerUnit: 0, disposalCostPerUnit: 15, laborHoursPerUnit: 0.5, laborHourlyRate: 45, isSystemDefault: true },
   { phaseType: 'demolition', category: 'Mauerwerk', name: 'Nichttragende Wand abbrechen', unit: 'm²', materialCostPerUnit: 0, disposalCostPerUnit: 6, laborHoursPerUnit: 0.4, laborHourlyRate: 45, isSystemDefault: true },
+  { phaseType: 'demolition', category: 'Trockenbau', name: 'Trockenbau: Wandprofile entfernen', unit: 'lfm', materialCostPerUnit: 0, disposalCostPerUnit: 1.5, laborHoursPerUnit: 0.05, laborHourlyRate: 42, description: 'Metall-Wandprofile (UW/CW) demontieren und entsorgen', isSystemDefault: true },
+  { phaseType: 'demolition', category: 'Trockenbau', name: 'Trockenbau: Rigipsplatten entfernen', unit: 'm²', materialCostPerUnit: 0, disposalCostPerUnit: 4, laborHoursPerUnit: 0.15, laborHourlyRate: 42, description: 'Gipskartonplatten demontieren und entsorgen', isSystemDefault: true },
 
   // === RENOVIERUNG ===
   { phaseType: 'renovation', category: 'Boden', name: 'Zementestrich einbauen (45mm)', unit: 'm²', materialCostPerUnit: 12, disposalCostPerUnit: 0, laborHoursPerUnit: 0.4, laborHourlyRate: 45, description: 'Zementestrich CT C25-F5, 45mm, inkl. Material und Einbau', isSystemDefault: true },
@@ -44,6 +46,8 @@ const TEMPLATES = [
   { phaseType: 'renovation', category: 'Installation', name: 'Heizkörper montieren', unit: 'Stück', materialCostPerUnit: 180, disposalCostPerUnit: 0, laborHoursPerUnit: 2, laborHourlyRate: 55, isSystemDefault: true },
   { phaseType: 'renovation', category: 'Fenster/Türen', name: 'Fenster einbauen (Kunststoff, 2-fach)', unit: 'Stück', materialCostPerUnit: 320, disposalCostPerUnit: 0, laborHoursPerUnit: 3, laborHourlyRate: 48, isSystemDefault: true },
   { phaseType: 'renovation', category: 'Fenster/Türen', name: 'Innentür mit Zarge einbauen', unit: 'Stück', materialCostPerUnit: 280, disposalCostPerUnit: 0, laborHoursPerUnit: 2.5, laborHourlyRate: 45, isSystemDefault: true },
+  { phaseType: 'renovation', category: 'Trockenbau', name: 'Trockenbau: Wandprofile montieren', unit: 'lfm', materialCostPerUnit: 4.5, disposalCostPerUnit: 0, laborHoursPerUnit: 0.08, laborHourlyRate: 42, description: 'UW- und CW-Profile (Metall-Ständerwerk) montieren, inkl. Dübel', isSystemDefault: true },
+  { phaseType: 'renovation', category: 'Trockenbau', name: 'Trockenbau: Rigipsplatten montieren', unit: 'm²', materialCostPerUnit: 8, disposalCostPerUnit: 0, laborHoursPerUnit: 0.3, laborHourlyRate: 42, description: 'Gipskartonplatten 12,5mm beidseitig beplanken, inkl. Schrauben und Verspachtelung', isSystemDefault: true },
 
   // === DACHAUSBAU ===
   { phaseType: 'specialConstruction', category: 'Dachdeckung', name: 'Dachziegel erneuern (Beton)', unit: 'm²', materialCostPerUnit: 28, disposalCostPerUnit: 4, laborHoursPerUnit: 0.6, laborHourlyRate: 50, isSystemDefault: true },

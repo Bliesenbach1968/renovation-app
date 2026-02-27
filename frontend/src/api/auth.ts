@@ -21,3 +21,19 @@ export const getUsers = async () => {
   const { data } = await client.get('/users');
   return data.data as User[];
 };
+export const deleteUser = async (id: string) => {
+  const { data } = await client.delete(`/users/${id}`);
+  return data;
+};
+export const resetUserPassword = async (id: string, newPassword: string) => {
+  const { data } = await client.put(`/users/${id}/password`, { newPassword });
+  return data;
+};
+export const forgotPassword = async (email: string) => {
+  const { data } = await client.post('/auth/forgot-password', { email });
+  return data as { success: boolean; resetToken?: string; message?: string };
+};
+export const resetPassword = async (token: string, password: string) => {
+  const { data } = await client.post('/auth/reset-password', { token, password });
+  return data;
+};

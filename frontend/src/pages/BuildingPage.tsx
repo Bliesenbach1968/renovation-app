@@ -48,26 +48,32 @@ function BereichPositionsPanel({
   const title = unterpunkt ? `${bereich} · ${unterpunkt}` : bereich;
 
   return (
-    <div className="border border-primary-200 bg-primary-50/40 rounded-xl p-4 mb-4">
-      <h3 className="font-semibold text-gray-800 text-sm mb-3">Position hinzufügen – {title}</h3>
-      <div className="space-y-1.5">
+    <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
+      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
+        Position hinzufügen – {title}
+      </h3>
+      <div className="space-y-2">
         <button
           onClick={() => onAdd()}
           className="btn-primary w-full text-sm py-2"
         >
-          + Position hinzufügen
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Position hinzufügen
         </button>
         {templates.length > 0 && (
           <>
-            <p className="text-xs text-gray-500 pt-1 pb-0.5">Oder aus Vorlage:</p>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-1 pb-0.5">Oder aus Vorlage</p>
             {templates.map(t => (
               <button
                 key={t._id}
                 onClick={() => onAdd(t)}
-                className="w-full flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-white border border-gray-200 hover:border-primary-400 hover:bg-primary-50 transition-colors text-left"
+                className="w-full flex items-center justify-between text-sm py-2.5 px-3.5 rounded-lg bg-white border border-slate-200 hover:border-primary-300 hover:bg-primary-50/50 transition-all duration-150 text-left shadow-sm hover:shadow-md"
               >
-                <span className="font-medium text-gray-800">{t.name}</span>
-                <span className="text-xs text-gray-400 shrink-0 ml-2">
+                <span className="font-medium text-slate-800">{t.name}</span>
+                <span className="text-xs text-slate-400 shrink-0 ml-2 font-mono">
                   {t.unit}
                   {t.materialCostPerUnit > 0 && ` · ${t.materialCostPerUnit} €`}
                   {t.laborHoursPerUnit > 0 && ` · ${t.laborHoursPerUnit} h`}
@@ -94,7 +100,7 @@ function AddFloorModal({ projectId, phaseType, onClose }: { projectId: string; p
     { onSuccess: () => { qc.invalidateQueries(['floors', projectId]); onClose(); } }
   );
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 className="font-semibold text-lg mb-4">Neue Etage anlegen</h3>
         <div className="space-y-4">
@@ -127,7 +133,7 @@ function AddUnitModal({ projectId, floorId, onClose }: { projectId: string; floo
     { onSuccess: () => { qc.invalidateQueries(['units', projectId]); onClose(); } }
   );
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 className="font-semibold text-lg mb-4">Neue Wohnung anlegen</h3>
         <div className="space-y-4">
@@ -167,7 +173,7 @@ function AddRoomModal({ projectId, floorId, unitId, onClose }: {
   }), { onSuccess: () => { qc.invalidateQueries(['rooms', projectId]); onClose(); } });
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h3 className="font-semibold text-lg mb-4">{unitId ? 'Raum zur Wohnung hinzufügen' : 'Neuen Raum anlegen'}</h3>
         <div className="space-y-4">
@@ -469,11 +475,11 @@ export default function BuildingPage() {
               {floorUnits.map((unit) => {
                 const unitRooms = roomsByUnit(unit._id);
                 return (
-                  <div key={unit._id} className="mt-3 border border-blue-200 rounded-lg p-3 bg-blue-50/40">
+                  <div key={unit._id} className="mt-3 border border-slate-200 rounded-lg p-3 bg-slate-50/40">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-blue-800">{unit.name}</span>
-                        {unit.number && <span className="text-xs text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded">Nr. {unit.number}</span>}
+                        <span className="font-medium text-sm text-slate-700">{unit.name}</span>
+                        {unit.number && <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Nr. {unit.number}</span>}
                         <span className="text-xs text-gray-400">{unitRooms.length} Räume</span>
                         {unitTotalArea(unit._id) > 0 && (
                           <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const { createAuditLog } = require('../middleware/auditLog');
 
@@ -40,6 +41,51 @@ exports.login = async (req, res, next) => {
 // GET /api/v1/auth/me
 exports.getMe = async (req, res) => {
   res.json({ success: true, data: req.user });
+};
+
+// POST /api/v1/auth/forgot-password
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'E-Mail erforderlich' });
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      // Kein Hinweis ob Nutzer existiert (Sicherheit)
+      return res.json({ success: true, message: 'Wenn diese E-Mail registriert ist, wurde ein Reset-Link generiert.' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 Stunde
+    await user.save({ validateBeforeSave: false });
+
+    res.json({ success: true, resetToken: rawToken });
+  } catch (err) { next(err); }
+};
+
+// POST /api/v1/auth/reset-password
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ message: 'Token und Passwort erforderlich' });
+    if (password.length < 8) return res.status(400).json({ message: 'Passwort muss mindestens 8 Zeichen haben' });
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    }).select('+resetPasswordToken +resetPasswordExpires');
+
+    if (!user) return res.status(400).json({ message: 'Reset-Link ungültig oder abgelaufen' });
+
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Passwort erfolgreich zurückgesetzt' });
+  } catch (err) { next(err); }
 };
 
 // PUT /api/v1/auth/password
