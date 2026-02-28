@@ -3,9 +3,9 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import {
   getProject, getFloors, getRooms, createFloor, createRoom, deleteRoom, deleteFloor,
-  getUnits, createUnit, deleteUnit, getTemplates,
+  getUnits, createUnit, deleteUnit, getTemplates, getPositions, deletePosition,
 } from '../api/projects';
-import type { Floor, Unit, Room, PhaseType, PositionTemplate } from '../types';
+import type { Floor, Unit, Room, PhaseType, PositionTemplate, Position } from '../types';
 import PositionForm, { getBereicheForPhase, BEREICH_UNTERPUNKTE } from '../components/PositionForm';
 
 const ROOM_TYPE_LABELS: Record<string, string> = {
@@ -29,13 +29,17 @@ const LEVEL_NAMES: Record<number, string> = {
 };
 
 function BereichPositionsPanel({
-  phase, bereich, unterpunkt, onAdd,
+  projectId, phase, bereich, unterpunkt, onAdd, onEdit,
 }: {
+  projectId: string;
   phase: string;
   bereich: string;
   unterpunkt?: string;
   onAdd: (template?: PositionTemplate) => void;
+  onEdit: (position: Position) => void;
 }) {
+  const qc = useQueryClient();
+
   const { data: allTemplates = [] } = useQuery(
     ['templates', phase],
     () => getTemplates(phase || undefined)
@@ -45,13 +49,27 @@ function BereichPositionsPanel({
     (!unterpunkt || !t.bereichUnterpunkt || t.bereichUnterpunkt === unterpunkt)
   );
 
+  const { data: bereichPositions = [] } = useQuery(
+    ['positions', 'bereich', projectId, phase, bereich, unterpunkt],
+    () => getPositions(projectId, { phaseType: phase, bereich, noRoom: 'true' })
+  );
+
+  const deleteMutation = useMutation(
+    (posId: string) => deletePosition(projectId, posId),
+    { onSuccess: () => qc.invalidateQueries(['positions', 'bereich', projectId]) }
+  );
+
+  const filteredPositions = (bereichPositions as Position[]).filter(p =>
+    !unterpunkt || !p.bereichUnterpunkt || p.bereichUnterpunkt === unterpunkt
+  );
+
   const title = unterpunkt ? `${bereich} · ${unterpunkt}` : bereich;
 
   return (
     <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
       <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-        Position hinzufügen – {title}
+        {title}
       </h3>
       <div className="space-y-2">
         <button
@@ -61,7 +79,7 @@ function BereichPositionsPanel({
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
-          Position hinzufügen
+          + Position hinzufügen
         </button>
         {templates.length > 0 && (
           <>
@@ -80,6 +98,37 @@ function BereichPositionsPanel({
                 </span>
               </button>
             ))}
+          </>
+        )}
+
+        {filteredPositions.length > 0 && (
+          <>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2 pb-0.5">
+              Angelegte Positionen ({filteredPositions.length})
+            </p>
+            <div className="space-y-1">
+              {filteredPositions.map(p => (
+                <div key={p._id} className="group flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-slate-800 truncate block">{p.name}</span>
+                    <span className="text-xs text-slate-400">
+                      {p.quantity} {p.unit}
+                      {p.totalCost > 0 && ` · ${p.totalCost.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}`}
+                    </span>
+                  </div>
+                  <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onEdit(p)}
+                      className="text-xs px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600"
+                    >✏</button>
+                    <button
+                      onClick={() => { if (confirm(`Position "${p.name}" löschen?`)) deleteMutation.mutate(p._id); }}
+                      className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600"
+                    >✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </>
         )}
       </div>
@@ -228,6 +277,7 @@ export default function BuildingPage() {
   const [addUnitFloor, setAddUnitFloor] = useState<string | null>(null);
   const [showBereichForm, setShowBereichForm] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<PositionTemplate | null>(null);
+  const [editBereichPosition, setEditBereichPosition] = useState<Position | null>(null);
 
   const qc = useQueryClient();
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
@@ -260,7 +310,27 @@ export default function BuildingPage() {
     () => getTemplates(selectedPhase || undefined)
   );
 
-  const bereiche = useMemo(() => getBereicheForPhase(selectedPhase, floors), [selectedPhase, floors]);
+  const { data: allPhasePositions = [] } = useQuery(
+    ['positions', 'all', projectId, selectedPhase],
+    () => getPositions(projectId!, { phaseType: selectedPhase }),
+    { enabled: !!projectId }
+  );
+
+  const bereichCount = useMemo(() => {
+    const map: Record<string, number> = {};
+    (allPhasePositions as Position[]).forEach(p => {
+      if (p.bereich && !p.roomId) map[p.bereich] = (map[p.bereich] || 0) + 1;
+    });
+    return map;
+  }, [allPhasePositions]);
+
+  const usedBereiche = useMemo(() => {
+    const fromStatic = getBereicheForPhase(selectedPhase, floors);
+    const extra = Object.keys(bereichCount).filter(b => !fromStatic.includes(b));
+    return [...fromStatic, ...extra];
+  }, [selectedPhase, floors, bereichCount]);
+
+  const bereiche = usedBereiche;
 
   const sortedFloors = [...floors]
     .filter(f => selectedPhase === 'specialConstruction'
@@ -359,6 +429,8 @@ export default function BuildingPage() {
           const isExpanded = expandedBereich === b;
           const isParentActive = selectedBereich === b;
 
+          const count = bereichCount[b] || 0;
+
           if (subItems) {
             return (
               <>
@@ -369,10 +441,17 @@ export default function BuildingPage() {
                       ? 'bg-primary-600 text-white border-primary-600'
                       : isExpanded
                       ? 'bg-primary-50 text-primary-700 border-primary-300'
+                      : count > 0
+                      ? 'bg-primary-50 text-primary-700 border-primary-300 hover:border-primary-500'
                       : 'bg-white text-gray-600 border-gray-300 hover:border-primary-400'
                   }`}
                 >
                   {b}
+                  {count > 0 && !isParentActive && (
+                    <span className="text-[10px] font-semibold bg-primary-500 text-white rounded-full px-1.5 py-0 leading-4 min-w-[18px] text-center">
+                      {count}
+                    </span>
+                  )}
                   <span className={`text-[10px] inline-block transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {isExpanded && subItems.map((sub) => {
@@ -400,13 +479,20 @@ export default function BuildingPage() {
           return (
             <button key={b}
               onClick={() => { setBereich(isParentActive && !selectedUnterpunkt ? '' : b); setExpandedBereich(''); }}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+              className={`text-xs px-3 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${
                 isParentActive && !selectedUnterpunkt
                   ? 'bg-primary-600 text-white border-primary-600'
+                  : count > 0
+                  ? 'bg-primary-50 text-primary-700 border-primary-300 hover:border-primary-500'
                   : 'bg-white text-gray-600 border-gray-300 hover:border-primary-400'
               }`}
             >
               {b}
+              {count > 0 && !(isParentActive && !selectedUnterpunkt) && (
+                <span className="text-[10px] font-semibold bg-primary-500 text-white rounded-full px-1.5 py-0 leading-4 min-w-[18px] text-center">
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -415,11 +501,18 @@ export default function BuildingPage() {
       {/* Bereich-Vorlagen-Panel */}
       {selectedBereich && (
         <BereichPositionsPanel
+          projectId={projectId!}
           phase={selectedPhase}
           bereich={selectedBereich}
           unterpunkt={selectedUnterpunkt || undefined}
           onAdd={(template) => {
+            setEditBereichPosition(null);
             setSelectedTemplate(template || null);
+            setShowBereichForm(true);
+          }}
+          onEdit={(pos) => {
+            setEditBereichPosition(pos);
+            setSelectedTemplate(null);
             setShowBereichForm(true);
           }}
         />
@@ -530,15 +623,17 @@ export default function BuildingPage() {
           rooms={allRoomsForPhase}
           phaseType={selectedPhase as PhaseType}
           templates={templates as PositionTemplate[]}
-          editPosition={null}
+          editPosition={editBereichPosition}
           initialTemplate={selectedTemplate}
           defaultHourlyRate={45}
           projectFloors={floors}
-          onClose={() => { setShowBereichForm(false); setSelectedTemplate(null); }}
+          onClose={() => { setShowBereichForm(false); setSelectedTemplate(null); setEditBereichPosition(null); }}
           onSuccess={() => {
+            qc.invalidateQueries(['positions', 'bereich', projectId]);
             qc.invalidateQueries(['positions']);
             setShowBereichForm(false);
             setSelectedTemplate(null);
+            setEditBereichPosition(null);
           }}
         />
       )}

@@ -11,6 +11,7 @@ router.route('/')
   .post(authorize('admin', 'projectLeader', 'calculator'), templateController.createTemplate);
 
 router.route('/:id')
+  .get(templateController.getTemplate)
   .put(authorize('admin', 'projectLeader', 'calculator'), templateController.updateTemplate)
   .delete(authorize('admin'), templateController.deleteTemplate);
 

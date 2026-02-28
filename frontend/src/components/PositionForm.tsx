@@ -211,9 +211,8 @@ export default function PositionForm({
   const effectiveRoomId = roomId || internalRoomId;
 
   const onSubmit = (data: FormValues) => {
-    if (!effectiveRoomId) return;
     mutation.mutate({
-      ...data, roomId: effectiveRoomId, phaseType,
+      ...data, roomId: effectiveRoomId || undefined, phaseType,
       templateId: selectedTemplate || undefined,
       bereich: data.bereich || undefined,
       aussenanlageUnterpunkt: data.bereich === 'Außenanlage' ? (data.aussenanlageUnterpunkt || undefined) : undefined,
@@ -241,12 +240,11 @@ export default function PositionForm({
           {/* Raum-Auswahl (nur wenn von BuildingPage geöffnet) */}
           {!roomId && rooms && rooms.length > 0 && (
             <div>
-              <label className="label">Raum *</label>
+              <label className="label">Raum (optional)</label>
               <select
                 value={internalRoomId}
                 onChange={(e) => setInternalRoomId(e.target.value)}
                 className="input"
-                required
               >
                 <option value="">– Raum auswählen –</option>
                 {rooms.map(r => (
@@ -496,7 +494,7 @@ export default function PositionForm({
         </form>
 
         <div className="flex gap-3 px-6 py-4 border-t border-gray-200">
-          <button onClick={handleSubmit(onSubmit)} disabled={mutation.isLoading || (!effectiveRoomId)} className="btn-primary">
+          <button onClick={handleSubmit(onSubmit)} disabled={mutation.isLoading} className="btn-primary">
             {mutation.isLoading ? 'Speichern...' : isEdit ? 'Speichern' : 'Position anlegen'}
           </button>
           <button onClick={onClose} className="btn-secondary">Abbrechen</button>

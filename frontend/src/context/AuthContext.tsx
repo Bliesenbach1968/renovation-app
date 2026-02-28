@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useQueryClient } from 'react-query';
 import client from '../api/client';
 import { login as apiLogin, getMe } from '../api/auth';
 import type { User } from '../types';
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Beim Start: gespeichertes Token validieren
   useEffect(() => {
@@ -34,12 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await apiLogin(email, password);
     localStorage.setItem('token', result.token);
     client.defaults.headers.common['Authorization'] = `Bearer ${result.token}`;
+    queryClient.clear();
     setUser(result.user);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
     delete client.defaults.headers.common['Authorization'];
+    queryClient.clear();
     setUser(null);
   };
 

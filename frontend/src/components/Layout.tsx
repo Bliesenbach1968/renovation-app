@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ICONS = {
@@ -33,8 +33,7 @@ const navItem = ({ isActive }: { isActive: boolean }) =>
 
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth();
-  const navigate = useNavigate();
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => { logout(); window.location.replace('/login'); };
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() ?? '?';
 
   return (

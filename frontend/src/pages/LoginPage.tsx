@@ -17,7 +17,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(data.email, data.password);
-      navigate('/');
+      window.location.replace('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Anmeldung fehlgeschlagen');
     } finally { setLoading(false); }

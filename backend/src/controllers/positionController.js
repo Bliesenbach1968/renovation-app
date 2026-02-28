@@ -9,6 +9,8 @@ exports.getPositions = async (req, res, next) => {
     if (req.query.phaseType) filter.phaseType = req.query.phaseType;
     if (req.query.status)    filter.status    = req.query.status;
     if (req.query.category)  filter.category  = req.query.category;
+    if (req.query.bereich)   filter.bereich   = req.query.bereich;
+    if (req.query.noRoom === 'true') filter.roomId = null;
 
     const positions = await Position.find(filter)
       .populate('roomId', 'name type')

@@ -10,6 +10,15 @@ exports.getTemplates = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// GET /api/v1/templates/:id
+exports.getTemplate = async (req, res, next) => {
+  try {
+    const template = await PositionTemplate.findById(req.params.id);
+    if (!template) return res.status(404).json({ message: 'Vorlage nicht gefunden' });
+    res.json({ success: true, data: template });
+  } catch (err) { next(err); }
+};
+
 // POST /api/v1/templates
 exports.createTemplate = async (req, res, next) => {
   try {

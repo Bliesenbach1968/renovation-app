@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const positionSchema = new mongoose.Schema(
   {
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
-    roomId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Room',    required: true },
+    roomId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Room',    required: false, default: null },
     phaseType: {
       type: String,
       enum: ['demolition', 'renovation', 'specialConstruction'],
