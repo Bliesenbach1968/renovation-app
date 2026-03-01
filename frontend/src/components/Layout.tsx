@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,6 +23,11 @@ const ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
     </svg>
   ),
+  hamburger: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+  ),
 };
 
 const navItem = ({ isActive }: { isActive: boolean }) =>
@@ -33,15 +39,51 @@ const navItem = ({ isActive }: { isActive: boolean }) =>
 
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const handleLogout = () => { logout(); window.location.replace('/login'); };
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() ?? '?';
+  const close = () => setSidebarOpen(false);
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F5F5F7' }}>
 
+      {/* ── Mobile top bar ────────────────────────────────── */}
+      <div
+        className="md:hidden fixed top-0 inset-x-0 h-14 z-30 flex items-center gap-3 px-4"
+        style={{ background: '#1D1D1F', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="text-white/70 hover:text-white p-1 -ml-1 rounded-lg"
+          aria-label="Menü öffnen"
+        >
+          {ICONS.hamburger}
+        </button>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-7 h-7 flex items-center justify-center shrink-0"
+            style={{
+              background: 'linear-gradient(145deg, #147CE5 0%, #0071E3 100%)',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,113,227,0.40)',
+            }}
+          >
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21" />
+            </svg>
+          </div>
+          <p className="text-white text-[13px] font-bold leading-tight tracking-tight">Sanierungsprojekte</p>
+        </div>
+      </div>
+
+      {/* ── Mobile backdrop ───────────────────────────────── */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={close} />
+      )}
+
       {/* ── Sidebar ─────────────────────────────────────── */}
       <aside
-        className="w-[220px] flex flex-col flex-shrink-0"
+        className={`fixed inset-y-0 left-0 z-50 w-[220px] flex flex-col flex-shrink-0 transition-transform duration-300 md:relative md:z-auto md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
           background: '#1D1D1F',
           borderRight: '1px solid rgba(255,255,255,0.06)',
@@ -73,7 +115,7 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="flex-1 px-2.5 py-3.5 space-y-0.5 overflow-y-auto">
-          <NavLink to="/" end className={navItem}>
+          <NavLink to="/" end className={navItem} onClick={close}>
             {ICONS.home}
             Dashboard
           </NavLink>
@@ -85,11 +127,11 @@ export default function Layout() {
                   Administration
                 </p>
               </div>
-              <NavLink to="/admin/users" className={navItem}>
+              <NavLink to="/admin/users" className={navItem} onClick={close}>
                 {ICONS.users}
                 Nutzerverwaltung
               </NavLink>
-              <NavLink to="/admin/templates" className={navItem}>
+              <NavLink to="/admin/templates" className={navItem} onClick={close}>
                 {ICONS.templates}
                 Vorlagen
               </NavLink>
@@ -134,7 +176,7 @@ export default function Layout() {
       </aside>
 
       {/* ── Content ─────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
         <Outlet />
       </main>
     </div>

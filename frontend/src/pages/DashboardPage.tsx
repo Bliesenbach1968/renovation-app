@@ -127,8 +127,8 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen" style={{ background: '#F5F5F7' }}>
       {/* ── Page Header ─────────────────────────────────── */}
-      <div className="px-6 py-5" style={{ background: 'rgba(245,245,247,0.85)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', borderBottom: '0.5px solid rgba(0,0,0,0.10)', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <div className="px-4 sm:px-6 py-4 sm:py-5" style={{ background: 'rgba(245,245,247,0.85)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', borderBottom: '0.5px solid rgba(0,0,0,0.10)', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-[20px] font-bold tracking-tight" style={{ color: '#1D1D1F', letterSpacing: '-0.022em' }}>Projektübersicht</h1>
             <p className="text-[13px] mt-0.5" style={{ color: '#6E6E73' }}>
@@ -146,7 +146,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* ── Stats Row ──────────────────────────────────── */}
         {!isLoading && projects.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -165,8 +165,8 @@ export default function DashboardPage() {
         )}
 
         {/* ── Filters ────────────────────────────────────── */}
-        <div className="flex gap-3 mb-6">
-          <div className="relative flex-1 max-w-xs">
+        <div className="flex flex-wrap gap-3 mb-6">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>

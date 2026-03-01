@@ -212,11 +212,11 @@ export default function SummaryPage() {
   const totals = summary?.totals;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <Link to={`/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">← Projekt</Link>
-        <h1 className="text-2xl font-bold text-gray-900">Kostenkalkulation</h1>
-        <span className="text-gray-400 text-sm">{project?.name}</span>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kostenkalkulation</h1>
+        <span className="text-gray-400 text-sm hidden sm:inline">{project?.name}</span>
         <div className="ml-auto">
           <button
             onClick={() => project && summary && downloadPDF(project, summary, containers, gerueste, kraene)}
@@ -374,7 +374,7 @@ export default function SummaryPage() {
       {totals && (
         <div className="card bg-primary-50 border border-primary-200 mb-6">
           <h3 className="font-bold text-primary-900 text-lg mb-4">Gesamtkosten Projekt</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4 text-center">
             {[
               { label: 'Materialkosten', val: totals.materialCost },
               { label: 'Entsorgungskosten', val: totals.disposalCost },

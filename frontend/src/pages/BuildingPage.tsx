@@ -385,14 +385,15 @@ export default function BuildingPage() {
   );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4 sm:mb-6">
         <Link to={`/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">← Projekt</Link>
         <h1 className="text-xl font-bold text-gray-900">{project?.name} – Gebäudestruktur</h1>
       </div>
 
       {/* Phase-Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 pb-0">
+      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+      <div className="flex gap-2 border-b border-gray-200 pb-0 min-w-max">
         {[
           { key: 'demolition', label: 'Entkernung' },
           { key: 'renovation', label: 'Renovierung' },
@@ -409,6 +410,7 @@ export default function BuildingPage() {
             {tab.label}
           </Link>
         ))}
+      </div>
       </div>
 
       {/* Bereich-Filter */}

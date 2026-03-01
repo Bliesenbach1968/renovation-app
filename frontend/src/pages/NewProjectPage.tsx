@@ -72,8 +72,8 @@ export default function NewProjectPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="btn-secondary btn-sm">← Zurück</button>
         <h1 className="text-2xl font-bold text-gray-900">Neues Projekt anlegen</h1>
       </div>
@@ -119,7 +119,7 @@ export default function NewProjectPage() {
 
         <div className="card space-y-4">
           <h2 className="font-semibold text-gray-900">Auftraggeber</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="label">Name</label><input {...register('client.name')} className="input" placeholder="Max Mustermann" /></div>
             <div><label className="label">Firma</label><input {...register('client.company')} className="input" placeholder="Mustermann GmbH" /></div>
             <div><label className="label">Telefon</label><input {...register('client.phone')} className="input" placeholder="+49 221 ..." /></div>
@@ -182,7 +182,7 @@ export default function NewProjectPage() {
           ] as const).map(({ key, label }) => (
             <div key={key} className="pb-3 border-b border-gray-100 last:border-0 last:pb-0">
               <h3 className="text-sm font-medium text-gray-700 mb-2">{label}</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Geplanter Start</label>
                   <input {...register(`phaseTimelines.${key}.plannedStart`)} type="date" className="input" />

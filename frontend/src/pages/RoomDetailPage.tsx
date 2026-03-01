@@ -51,9 +51,9 @@ export default function RoomDetailPage() {
   }), { material: 0, disposal: 0, labor: 0, total: 0 });
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-sm text-gray-500 mb-4">
         <Link to={`/projects/${projectId}`} className="hover:text-gray-700">Projekt</Link>
         <span>›</span>
         <Link to={`/projects/${projectId}/building?phase=${phase}`} className="hover:text-gray-700">Gebäude</Link>
@@ -68,7 +68,7 @@ export default function RoomDetailPage() {
       </div>
 
       {/* Room Header */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{room?.name}</h1>
           {(room?.type || room?.floorId) && (
@@ -105,7 +105,8 @@ export default function RoomDetailPage() {
       </div>
 
       {/* Phase Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 mb-6">
+      <div className="flex gap-2 border-b border-gray-200 min-w-max">
         {['demolition', 'renovation', 'specialConstruction'].map((p) => (
           <button key={p}
             onClick={() => setSearchParams({ phase: p })}
@@ -116,6 +117,7 @@ export default function RoomDetailPage() {
             {PHASE_LABELS[p]}
           </button>
         ))}
+      </div>
       </div>
 
       {/* Positions Table */}
