@@ -23,6 +23,35 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Farbkonfiguration für geplanteGesamtsummeProjekt.
+// Die Farbe hängt vom Feld geplanteGesamtsummeFarbstatus ab, das das Backend berechnet:
+//   'gruen' → Plan = Ist bei Aktivierung (Ausgangszustand OK)
+//   'gelb'  → Abweichung ≥ 5 % und ≤ 30 % vom Referenzwert bei Aktivierung
+//   'rot'   → Abweichung > 30 % (starke Planüberschreitung oder -unterschreitung)
+//   null    → noch kein Referenzwert gesetzt, neutrale Darstellung
+const GESAMTSUMME_FARBE: Record<string, { bg: string; text: string; ring: string; label: string }> = {
+  gruen: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-1 ring-emerald-200', label: 'Plan = Ist bei Aktivierung' },
+  gelb:  { bg: 'bg-amber-50',   text: 'text-amber-700',   ring: 'ring-1 ring-amber-200',   label: 'Abweichung ≥ 5 %' },
+  rot:   { bg: 'bg-red-50',     text: 'text-red-700',     ring: 'ring-1 ring-red-200',     label: 'Abweichung > 30 %' },
+};
+
+/**
+ * Formatiert große Zahlen kompakt für den Karten-Footer:
+ *   ≥ 1.000.000 → "10,0 Mio. €"  (spart Platz bei großen Beträgen)
+ *   < 1.000.000 → "11.008,00 €"  (volle Darstellung mit 2 Nachkommastellen)
+ * Der volle Betrag wird immer als title-Tooltip verfügbar gemacht.
+ */
+function fmtKompakt(n: number): string {
+  if (n >= 1_000_000) {
+    return (n / 1_000_000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' Mio. €';
+  }
+  return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+function fmtVoll(n: number): string {
+  return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
 function ProjectCard({ project, onDelete, isAdmin }: { project: Project; onDelete: (id: string, name: string) => void; isAdmin: boolean }) {
   const navigate = useNavigate();
   const completedPhases = project.phases.filter((p: any) => p.status === 'completed').length;
@@ -61,8 +90,8 @@ function ProjectCard({ project, onDelete, isAdmin }: { project: Project; onDelet
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)', background: 'rgba(245,245,247,0.6)' }}>
-        <div className="flex items-center gap-4 text-xs text-slate-400">
+      <div className="px-5 py-3 flex items-center justify-between gap-2" style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)', background: 'rgba(245,245,247,0.6)' }}>
+        <div className="flex items-center gap-3 text-xs text-slate-400 min-w-0 flex-1 overflow-hidden">
           <span className="flex items-center gap-1">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.75 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
@@ -75,17 +104,34 @@ function ProjectCard({ project, onDelete, isAdmin }: { project: Project; onDelet
             </svg>
             {completedPhases}/{project.phases.length} Phasen
           </span>
-          {project.geplanteGesamtsummeProjekt != null && (
-            <span className="flex items-center gap-1 text-slate-500 font-medium">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33" />
-              </svg>
-              {project.geplanteGesamtsummeProjekt.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-            </span>
-          )}
+          {project.geplanteGesamtsummeProjekt != null && (() => {
+            // Farbkonfiguration aus Statusfeld laden; null → neutrale Darstellung
+            const farbCfg = project.geplanteGesamtsummeFarbstatus
+              ? GESAMTSUMME_FARBE[project.geplanteGesamtsummeFarbstatus]
+              : null;
+            const vollbetrag = fmtVoll(project.geplanteGesamtsummeProjekt);
+            // Tooltip: Vollbetrag + ggf. Farbstatus-Label
+            const tooltip = farbCfg ? `${vollbetrag} – ${farbCfg.label}` : vollbetrag;
+            return (
+              <span
+                title={tooltip}
+                className={`flex items-center gap-1 font-medium rounded px-1.5 py-0.5 transition-colors shrink-0 ${
+                  farbCfg
+                    ? `${farbCfg.bg} ${farbCfg.text} ${farbCfg.ring}`
+                    : 'text-slate-500'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33" />
+                </svg>
+                {/* Kompakte Darstellung: ≥ 1 Mio. → "10,0 Mio. €"; sonst volle Zahl */}
+                {fmtKompakt(project.geplanteGesamtsummeProjekt)}
+              </span>
+            );
+          })()}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => navigate(`/projects/${project._id}/edit`)}
             className="btn btn-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm focus:ring-primary-500 text-xs"

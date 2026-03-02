@@ -185,6 +185,27 @@ exports.updateProject = async (req, res, next) => {
         .populate('team.userId', 'name email role');
     }
 
+    // ── Farbstatus bei direkter Projekt-Aktivierung (PUT /projects/:id) ─────
+    // Wenn das Projekt erstmals auf 'active' gesetzt wird (Statuswechsel von außen),
+    // wird der Referenzwert geplanteGesamtsummeProjektBeiAktivierung gesetzt
+    // und der initiale Farbstatus (grün) geprüft.
+    if (req.body.status === 'active' && before.status !== 'active') {
+      if (project.geplanteGesamtsummeProjektBeiAktivierung == null &&
+          project.geplanteGesamtsummeProjekt != null) {
+        // Ist-Gesamtsumme berechnen (alle Kosten aller Phasen aus DB)
+        const istTotal = await berechneIstGesamtsumme(project._id);
+        if (project.geplanteGesamtsummeProjekt === istTotal) {
+          // Plan = Ist → Ausgangszustand OK → grün; Referenzwert einmalig speichern
+          project.geplanteGesamtsummeProjektBeiAktivierung = project.geplanteGesamtsummeProjekt;
+          project.geplanteGesamtsummeFarbstatus = 'gruen';
+          await project.save();
+          project = await Project.findById(project._id)
+            .populate('createdBy', 'name email')
+            .populate('team.userId', 'name email role');
+        }
+      }
+    }
+
     await createAuditLog({ userId: req.user._id, projectId: project._id, entityType: 'project', entityId: project._id, action: 'update', before: before?.toJSON(), after: project.toJSON(), req });
     res.json({ success: true, data: project });
   } catch (err) { next(err); }
@@ -374,6 +395,48 @@ async function calcPhaseTotal(projectId, phaseType) {
   ).toFixed(2);
 }
 
+/**
+ * Berechnet die aktuelle Ist-Gesamtsumme des Projekts über alle drei Phasen
+ * (alle Positionen, Container, Gerüste und Krane, unabhängig vom Phasenstatus).
+ */
+async function berechneIstGesamtsumme(projectId) {
+  const [entkernung, renovierung, sonderarbeiten] = await Promise.all([
+    calcPhaseTotal(projectId, 'demolition'),
+    calcPhaseTotal(projectId, 'renovation'),
+    calcPhaseTotal(projectId, 'specialConstruction'),
+  ]);
+  return +(entkernung + renovierung + sonderarbeiten).toFixed(2);
+}
+
+/**
+ * Leitet den Farbstatus des Feldes geplanteGesamtsummeProjekt aus der prozentualen
+ * Abweichung zum Referenzwert bei Erstaktivierung ab.
+ *
+ * Berechnungsformel:
+ *   abweichungProzent = (geplanteGesamtsummeProjekt - Referenz) / Referenz * 100
+ *
+ * Rückgabewerte (Priorität: rot > gelb > grün):
+ *   'rot'   — |Abweichung| > 30 %
+ *   'gelb'  — |Abweichung| >= 5 % und <= 30 %
+ *   'gruen' — |Abweichung| < 5 % (Plan entspricht noch dem Ausgangszustand)
+ *   null    — kein Referenzwert vorhanden, Berechnung nicht möglich
+ */
+function berechneGesamtsummeFarbstatus(project) {
+  const geplant  = project.geplanteGesamtsummeProjekt;
+  const referenz = project.geplanteGesamtsummeProjektBeiAktivierung;
+
+  // Ohne Referenzwert oder geplante Summe ist keine Bewertung möglich
+  if (referenz == null || geplant == null || referenz === 0) return null;
+
+  // Prozentuale Abweichung (positiv = Kostensteigerung, negativ = Kostensenkung)
+  const abweichungProzent = ((geplant - referenz) / referenz) * 100;
+
+  // Priorität: rot > gelb > grün
+  if (Math.abs(abweichungProzent) > 30) return 'rot';
+  if (Math.abs(abweichungProzent) >= 5)  return 'gelb';
+  return 'gruen';
+}
+
 // PATCH /api/v1/projects/:id/phases/:phaseId — Phasenstatus ändern
 exports.updatePhaseStatus = async (req, res, next) => {
   try {
@@ -413,6 +476,26 @@ exports.updatePhaseStatus = async (req, res, next) => {
         (project.geplantePhasensummeRenovierung   || 0) +
         (project.geplantePhasensummeSonderarbeiten || 0);
       project.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
+    }
+
+    // ── Farbstatus-Logik (nur wenn Projekt aktiv) ───────────────────────────
+    // Die Farbe wird nur bei aktivem Projekt bewertet und gespeichert.
+    if (project.status === 'active' && previousStatus === 'planned' && status === 'active') {
+      if (project.geplanteGesamtsummeProjektBeiAktivierung == null) {
+        // Erster Grün-Check: Referenzwert setzen, wenn geplante Summe == Ist-Summe.
+        // Das bedeutet: der Plan deckt sich vollständig mit den aktuellen Kosten.
+        const istTotal = await berechneIstGesamtsumme(req.params.id);
+        if (project.geplanteGesamtsummeProjekt === istTotal) {
+          // Plan = Ist → Ausgangszustand ist in Ordnung → grün
+          project.geplanteGesamtsummeProjektBeiAktivierung = project.geplanteGesamtsummeProjekt;
+          project.geplanteGesamtsummeFarbstatus = 'gruen';
+        }
+        // Wenn Plan ≠ Ist (noch nicht alle Phasen aktiviert): kein Referenzwert,
+        // kein Farbstatus – wird beim nächsten Phasenübergang erneut geprüft.
+      } else {
+        // Referenzwert existiert bereits → Abweichung vom Ausgangszustand berechnen
+        project.geplanteGesamtsummeFarbstatus = berechneGesamtsummeFarbstatus(project);
+      }
     }
 
     await project.save();

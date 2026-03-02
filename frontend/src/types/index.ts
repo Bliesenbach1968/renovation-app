@@ -53,6 +53,10 @@ export interface Project {
   geplantePhasensummeRenovierung?: number | null;
   geplantePhasensummeSonderarbeiten?: number | null;
   geplanteGesamtsummeProjekt?: number | null;
+  /** Referenzwert der geplanten Gesamtsumme bei Erstaktivierung (einmalig gesetzt) */
+  geplanteGesamtsummeProjektBeiAktivierung?: number | null;
+  /** Farbstatus für geplanteGesamtsummeProjekt: 'gruen' | 'gelb' | 'rot' | null */
+  geplanteGesamtsummeFarbstatus?: 'gruen' | 'gelb' | 'rot' | null;
   createdBy: User;
   createdAt: string;
   updatedAt: string;

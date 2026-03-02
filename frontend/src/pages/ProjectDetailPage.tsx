@@ -136,6 +136,12 @@ export default function ProjectDetailPage() {
   const { data: project, isLoading } = useQuery(['project', id], () => getProject(id!));
   const [showEditKennzahlen, setShowEditKennzahlen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [confirmPhase, setConfirmPhase] = useState<{
+    phaseId: string;
+    phaseName: string;
+    status: string;
+    actionLabel: string;
+  } | null>(null);
   const [addUserId, setAddUserId] = useState('');
   const [addRole, setAddRole] = useState('worker');
 
@@ -383,7 +389,13 @@ export default function ProjectDetailPage() {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          phaseStatusMutation.mutate({ phaseId: phase._id, status: nextStatus.next });
+                          // Bestätigungs-Dialog anzeigen statt direkt zu mutieren
+                          setConfirmPhase({
+                            phaseId:     phase._id,
+                            phaseName:   phase.name,
+                            status:      nextStatus.next,
+                            actionLabel: nextStatus.label,
+                          });
                         }}
                         disabled={phaseStatusMutation.isLoading}
                         className="btn btn-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm text-xs"
@@ -537,6 +549,54 @@ export default function ProjectDetailPage() {
 
       {showEditKennzahlen && (
         <GebaeudekennzahlenModal project={project} onClose={() => setShowEditKennzahlen(false)} />
+      )}
+
+      {/* Bestätigungs-Dialog für Phasenstatus-Änderung */}
+      {confirmPhase && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-1">
+                  Phase {confirmPhase.actionLabel.toLowerCase()}?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Soll die Phase <span className="font-medium text-gray-800">„{confirmPhase.phaseName}"</span> wirklich
+                  {confirmPhase.status === 'active'
+                    ? ' aktiviert werden? Die aktuellen Kosten werden als geplante Phasensumme gespeichert.'
+                    : ' als abgeschlossen markiert werden?'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmPhase(null)}
+                className="btn-secondary btn-sm"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() => {
+                  phaseStatusMutation.mutate({ phaseId: confirmPhase.phaseId, status: confirmPhase.status });
+                  setConfirmPhase(null);
+                }}
+                disabled={phaseStatusMutation.isLoading}
+                className={`btn btn-sm text-white shadow-sm ${
+                  confirmPhase.status === 'active'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700'
+                    : 'bg-slate-600 hover:bg-slate-700 border-slate-700'
+                }`}
+              >
+                {confirmPhase.actionLabel}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
     </div>

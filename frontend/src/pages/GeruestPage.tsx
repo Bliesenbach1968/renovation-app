@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useState } from 'react';
-import { getProject, getGerueste, createGeruest, deleteGeruest } from '../api/projects';
+import { getProject, getGerueste, createGeruest, updateGeruest, deleteGeruest } from '../api/projects';
 import type { Geruest } from '../types';
 
 function eur(n: number) {
@@ -18,24 +18,59 @@ export default function GeruestPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<Geruest | null>(null);
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: gerueste = [] } = useQuery(['gerueste', projectId], () => getGerueste(projectId!));
 
+  const invalidate = () => {
+    qc.invalidateQueries(['gerueste', projectId]);
+    qc.invalidateQueries(['summary', projectId]);
+  };
+
   const deleteMutation = useMutation(
     (id: string) => deleteGeruest(projectId!, id),
-    { onSuccess: () => { qc.invalidateQueries(['gerueste', projectId]); qc.invalidateQueries(['summary', projectId]); } }
+    { onSuccess: invalidate }
   );
 
   const addMutation = useMutation(
     (body: Partial<Geruest>) => createGeruest(projectId!, body),
     {
-      onSuccess: () => { qc.invalidateQueries(['gerueste', projectId]); qc.invalidateQueries(['summary', projectId]); setShowForm(false); },
+      onSuccess: () => { invalidate(); setShowForm(false); },
+      onError: (err: any) => { alert(err?.response?.data?.message ?? 'Fehler beim Speichern'); },
+    }
+  );
+
+  const editMutation = useMutation(
+    ({ id, body }: { id: string; body: Partial<Geruest> }) => updateGeruest(projectId!, id, body),
+    {
+      onSuccess: () => { invalidate(); setShowForm(false); setEditItem(null); },
       onError: (err: any) => { alert(err?.response?.data?.message ?? 'Fehler beim Speichern'); },
     }
   );
 
   const totalCost = gerueste.reduce((sum, g) => sum + g.totalCost, 0);
+
+  function handleAddClick() {
+    // Wenn gerade im Bearbeiten-Modus → in Neu-anlegen-Modus wechseln; sonst togglen
+    if (editItem) { setEditItem(null); setShowForm(true); }
+    else setShowForm(f => !f);
+  }
+
+  function handleEditClick(g: Geruest) {
+    setEditItem(g);
+    setShowForm(true);
+  }
+
+  function handleFormSubmit(body: Partial<Geruest>) {
+    if (editItem) editMutation.mutate({ id: editItem._id, body });
+    else addMutation.mutate(body);
+  }
+
+  function handleFormCancel() {
+    setShowForm(false);
+    setEditItem(null);
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -48,15 +83,17 @@ export default function GeruestPage() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900">Gebuchte Gerüste</h2>
-          <button onClick={() => setShowForm(!showForm)} className="btn-secondary btn-sm">
+          <button onClick={handleAddClick} className="btn-secondary btn-sm">
             + Gerüst buchen
           </button>
         </div>
 
         {showForm && (
           <GeruestForm
-            onSubmit={(body) => addMutation.mutate(body)}
-            onCancel={() => setShowForm(false)}
+            key={editItem?._id ?? 'new'}
+            initial={editItem ?? undefined}
+            onSubmit={handleFormSubmit}
+            onCancel={handleFormCancel}
           />
         )}
 
@@ -77,7 +114,7 @@ export default function GeruestPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {gerueste.map((g) => (
-                  <tr key={g._id} className="hover:bg-gray-50 group">
+                  <tr key={g._id} className={`hover:bg-gray-50 group ${editItem?._id === g._id ? 'bg-primary-50' : ''}`}>
                     <td className="table-cell">{g.type}</td>
                     <td className="table-cell text-gray-500">{PHASE_NAMES[g.phaseType] ?? g.phaseType}</td>
                     <td className="table-cell text-right">{g.areaSqm}</td>
@@ -86,10 +123,18 @@ export default function GeruestPage() {
                     <td className="table-cell text-right">{eur(g.assemblyDisassemblyCost)}</td>
                     <td className="table-cell text-right font-semibold">{eur(g.totalCost)}</td>
                     <td className="table-cell">
-                      <button
-                        onClick={() => { if (confirm('Gerüst löschen?')) deleteMutation.mutate(g._id); }}
-                        className="opacity-0 group-hover:opacity-100 btn-danger btn-sm px-2"
-                      >✕</button>
+                      <div className="flex gap-1 justify-end">
+                        <button
+                          onClick={() => handleEditClick(g)}
+                          className="opacity-0 group-hover:opacity-100 btn-secondary btn-sm px-2"
+                          title="Bearbeiten"
+                        >✏</button>
+                        <button
+                          onClick={() => { if (confirm('Gerüst löschen?')) deleteMutation.mutate(g._id); }}
+                          className="opacity-0 group-hover:opacity-100 btn-danger btn-sm px-2"
+                          title="Löschen"
+                        >✕</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -109,21 +154,33 @@ export default function GeruestPage() {
   );
 }
 
-function GeruestForm({ onSubmit, onCancel }: { onSubmit: (b: any) => void; onCancel: () => void }) {
+function GeruestForm({
+  onSubmit,
+  onCancel,
+  initial,
+}: {
+  onSubmit: (b: any) => void;
+  onCancel: () => void;
+  initial?: Geruest;
+}) {
+  const isEdit = !!initial;
   const [form, setForm] = useState({
-    type: 'Fassadengerüst',
-    areaSqm: 100,
-    rentalWeeks: 4,
-    pricePerSqmPerWeek: 2.5,
-    assemblyDisassemblyCost: 500,
-    phaseType: 'demolition',
-    notes: '',
+    type:                    initial?.type                    ?? 'Fassadengerüst',
+    areaSqm:                 initial?.areaSqm                 ?? 100,
+    rentalWeeks:             initial?.rentalWeeks             ?? 4,
+    pricePerSqmPerWeek:      initial?.pricePerSqmPerWeek      ?? 2.5,
+    assemblyDisassemblyCost: initial?.assemblyDisassemblyCost ?? 500,
+    phaseType:               initial?.phaseType               ?? 'demolition',
+    notes:                   initial?.notes                   ?? '',
   });
 
   const preview = +(form.areaSqm * form.rentalWeeks * form.pricePerSqmPerWeek + form.assemblyDisassemblyCost).toFixed(2);
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+    <div className="border border-primary-200 rounded-lg p-4 mb-4 bg-primary-50/30">
+      {isEdit && (
+        <p className="text-xs font-semibold text-primary-700 mb-3 uppercase tracking-wide">Gerüst bearbeiten</p>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
         <div>
           <label className="label">Typ</label>
@@ -164,7 +221,9 @@ function GeruestForm({ onSubmit, onCancel }: { onSubmit: (b: any) => void; onCan
         Gesamtkosten: {preview.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
       </p>
       <div className="flex gap-2">
-        <button onClick={() => onSubmit(form)} className="btn-primary btn-sm">Buchen</button>
+        <button onClick={() => onSubmit(form)} className="btn-primary btn-sm">
+          {isEdit ? 'Speichern' : 'Buchen'}
+        </button>
         <button onClick={onCancel} className="btn-secondary btn-sm">Abbrechen</button>
       </div>
     </div>
