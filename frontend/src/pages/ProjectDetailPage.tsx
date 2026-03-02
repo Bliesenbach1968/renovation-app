@@ -6,11 +6,6 @@ import { getProject, updateProject, addTeamMember, removeTeamMember } from '../a
 import { getUsers } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 
-const PHASE_LABELS: Record<string, string> = {
-  demolition: 'Entkernung',
-  renovation: 'Renovierung',
-  specialConstruction: 'Sonderarbeiten',
-};
 const PHASE_STATUS: Record<string, { label: string; color: string }> = {
   planned:    { label: 'Geplant',       color: 'bg-gray-100 text-gray-700' },
   active:     { label: 'Aktiv',         color: 'bg-green-100 text-green-700' },
@@ -194,18 +189,142 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Schnellnavigation */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
         {[
-          { label: 'Gebäude & Räume', to: `/projects/${id}/building`, icon: '🏠' },
-          { label: 'Kostenkalkulation', to: `/projects/${id}/summary`, icon: '💰' },
-          { label: 'Zeitplan', to: `/projects/${id}/timeline`, icon: '📅' },
-          { label: 'Container & Entsorgung', to: `/projects/${id}/containers`, icon: '🗑️' },
-          { label: 'Gerüst', to: `/projects/${id}/geruest`, icon: '🏗️' },
-          { label: 'Kran', to: `/projects/${id}/kran`, icon: '🏋️' },
+          {
+            label: 'Gebäude & Räume',
+            to: `/projects/${id}/building`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                {/* building body */}
+                <rect x="10" y="3" width="44" height="55"/>
+                {/* ground plate */}
+                <rect x="2" y="56" width="60" height="7"/>
+                {/* windows – 2×3 grid */}
+                <rect x="15" y="8"  width="11" height="11" fill="white"/>
+                <rect x="38" y="8"  width="11" height="11" fill="white"/>
+                <rect x="15" y="24" width="11" height="11" fill="white"/>
+                <rect x="38" y="24" width="11" height="11" fill="white"/>
+                <rect x="15" y="40" width="11" height="11" fill="white"/>
+                <rect x="38" y="40" width="11" height="11" fill="white"/>
+                {/* door */}
+                <rect x="26" y="45" width="12" height="14" fill="white" rx="1"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Kostenkalkulation',
+            to: `/projects/${id}/summary`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                {/* ledger body */}
+                <rect x="4" y="4" width="56" height="56" rx="2"/>
+                {/* white grid lines – horizontal */}
+                <rect x="4"  y="16" width="56" height="3" fill="white"/>
+                <rect x="4"  y="31" width="56" height="3" fill="white"/>
+                <rect x="4"  y="46" width="56" height="3" fill="white"/>
+                {/* white grid lines – vertical */}
+                <rect x="22" y="4"  width="3"  height="56" fill="white"/>
+                <rect x="42" y="4"  width="3"  height="56" fill="white"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Zeitplan',
+            to: `/projects/${id}/timeline`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                {/* calendar body */}
+                <rect x="4" y="12" width="56" height="49" rx="2"/>
+                {/* ring binders */}
+                <rect x="17" y="4"  width="8" height="18" rx="4"/>
+                <rect x="39" y="4"  width="8" height="18" rx="4"/>
+                {/* ring holes */}
+                <rect x="19" y="6"  width="4" height="10" rx="2" fill="white"/>
+                <rect x="41" y="6"  width="4" height="10" rx="2" fill="white"/>
+                {/* header separator */}
+                <rect x="4"  y="26" width="56" height="3"  fill="white"/>
+                {/* gantt bars */}
+                <rect x="10" y="33" width="20" height="7"  fill="white" rx="1"/>
+                <rect x="32" y="33" width="18" height="7"  fill="white" rx="1"/>
+                <rect x="10" y="45" width="38" height="7"  fill="white" rx="1"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Container & Entsorgung',
+            to: `/projects/${id}/containers`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                {/* left handle */}
+                <rect x="13" y="8"  width="8" height="18" rx="2"/>
+                {/* right handle */}
+                <rect x="43" y="8"  width="8" height="18" rx="2"/>
+                {/* top rim */}
+                <rect x="4"  y="20" width="56" height="7"/>
+                {/* body (trapezoid) */}
+                <path d="M8 27H56L51 61H13Z"/>
+                {/* vertical ribs */}
+                <path fill="none" stroke="white" strokeWidth="3"
+                  d="M22 28V58 M32 28V60 M42 28V58"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Gerüst',
+            to: `/projects/${id}/geruest`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                {/* left outer post */}
+                <rect x="4"    y="2" width="7" height="62"/>
+                {/* center post */}
+                <rect x="28.5" y="2" width="7" height="62"/>
+                {/* right outer post */}
+                <rect x="53"   y="2" width="7" height="62"/>
+                {/* top bar */}
+                <rect x="4" y="2"  width="56" height="7"/>
+                {/* plank 1 */}
+                <rect x="4" y="21" width="56" height="7"/>
+                {/* plank 2 */}
+                <rect x="4" y="40" width="56" height="7"/>
+                {/* ground plank */}
+                <rect x="4" y="57" width="56" height="7"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Kran',
+            to: `/projects/${id}/kran`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                {/* base plate */}
+                <rect x="10" y="57" width="26" height="6"/>
+                {/* mast */}
+                <rect x="18" y="12" width="10" height="45"/>
+                {/* mast lattice – white X pattern (4 cells) */}
+                <path fill="none" stroke="white" strokeWidth="2"
+                  d="M18 12L28 23M28 12L18 23 M18 23L28 34M28 23L18 34 M18 34L28 45M28 34L18 45 M18 45L28 56M28 45L18 56"/>
+                {/* boom */}
+                <rect x="4" y="8" width="54" height="4"/>
+                {/* apex triangle */}
+                <path d="M23 2L8 8H38Z"/>
+                {/* counter-jib weight block */}
+                <rect x="4" y="8" width="14" height="8"/>
+                {/* hoist rope */}
+                <rect x="55" y="12" width="2" height="22"/>
+                {/* hook link ring */}
+                <ellipse cx="56" cy="35" rx="5" ry="6"/>
+                <ellipse cx="56" cy="35" rx="2.5" ry="3" fill="white"/>
+                {/* hook J-curve */}
+                <path fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"
+                  d="M56 41L56 47Q56 54 49 54Q43 54 43 47Q43 41 46 40"/>
+              </svg>
+            ),
+          },
         ].map((item) => (
           <Link key={item.to} to={item.to}
             className="card hover:shadow-md transition-shadow text-center cursor-pointer group py-4">
-            <div className="text-2xl mb-1">{item.icon}</div>
+            <div className="mb-2 flex justify-center text-gray-600">{item.icon}</div>
             <p className="text-sm font-medium text-gray-700 group-hover:text-primary-600">{item.label}</p>
           </Link>
         ))}
