@@ -1,5 +1,6 @@
 const Kran = require('../models/Kran');
 const { createAuditLog } = require('../middleware/auditLog');
+const { aktualisiereProjektFarbstatus } = require('../utils/farbstatus');
 
 // GET /api/v1/projects/:projectId/kran
 exports.getKraene = async (req, res, next) => {
@@ -20,6 +21,7 @@ exports.createKran = async (req, res, next) => {
       createdBy: req.user._id,
     });
     await createAuditLog({ userId: req.user._id, projectId: req.params.projectId, entityType: 'kran', entityId: kran._id, action: 'create', after: kran.toJSON(), req });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.status(201).json({ success: true, data: kran });
   } catch (err) { next(err); }
 };
@@ -35,6 +37,7 @@ exports.updateKran = async (req, res, next) => {
     if (!kran) return res.status(404).json({ message: 'Kran nicht gefunden' });
     kran.totalCost = +(kran.rentalDays * (kran.pricePerDay + kran.operatorCostPerDay)).toFixed(2);
     await kran.save();
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, data: kran });
   } catch (err) { next(err); }
 };
@@ -44,6 +47,7 @@ exports.deleteKran = async (req, res, next) => {
   try {
     const kran = await Kran.findOneAndDelete({ _id: req.params.id, projectId: req.params.projectId });
     if (!kran) return res.status(404).json({ message: 'Kran nicht gefunden' });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, message: 'Kran gelöscht' });
   } catch (err) { next(err); }
 };

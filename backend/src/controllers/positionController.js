@@ -1,5 +1,6 @@
 const Position = require('../models/Position');
 const { createAuditLog } = require('../middleware/auditLog');
+const { aktualisiereProjektFarbstatus } = require('../utils/farbstatus');
 
 // GET /api/v1/projects/:projectId/positions?roomId=&phaseType=&status=
 exports.getPositions = async (req, res, next) => {
@@ -57,6 +58,7 @@ exports.createPosition = async (req, res, next) => {
 
     const position = await Position.create(positionData);
     await createAuditLog({ userId: req.user._id, projectId: req.params.projectId, entityType: 'position', entityId: position._id, action: 'create', after: position.toJSON(), req });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.status(201).json({ success: true, data: position });
   } catch (err) { next(err); }
 };
@@ -92,6 +94,7 @@ exports.updatePosition = async (req, res, next) => {
     await position.save();
 
     await createAuditLog({ userId: req.user._id, projectId: req.params.projectId, entityType: 'position', entityId: position._id, action: 'update', before: before?.toJSON(), after: position.toJSON(), req });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, data: position });
   } catch (err) { next(err); }
 };
@@ -102,6 +105,7 @@ exports.deletePosition = async (req, res, next) => {
     const position = await Position.findOneAndDelete({ _id: req.params.id, projectId: req.params.projectId });
     if (!position) return res.status(404).json({ message: 'Position nicht gefunden' });
     await createAuditLog({ userId: req.user._id, projectId: req.params.projectId, entityType: 'position', entityId: req.params.id, action: 'delete', before: position.toJSON(), req });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, message: 'Position gelöscht' });
   } catch (err) { next(err); }
 };

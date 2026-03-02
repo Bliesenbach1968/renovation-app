@@ -72,14 +72,13 @@ const projectSchema = new mongoose.Schema(
     geplantePhasensummeSonderarbeiten: { type: Number, default: null },
     geplanteGesamtsummeProjekt:        { type: Number, default: null },
 
-    // Referenzwert der geplanten Gesamtsumme zum Zeitpunkt der Erstaktivierung.
-    // Wird einmalig gesetzt, wenn geplanteGesamtsummeProjekt == Ist-Gesamtsumme bei Aktivierung.
-    geplanteGesamtsummeProjektBeiAktivierung: { type: Number, default: null },
-
     // Farbstatus für das Feld geplanteGesamtsummeProjekt im Dashboard.
-    // Werte: 'gruen' (Ausgangszustand OK), 'gelb' (Abweichung 5–30%), 'rot' (Abweichung >30%), null (kein Status)
-    // Die UI liest dieses Feld und setzt entsprechend den Hintergrund des Feldes.
-    geplanteGesamtsummeFarbstatus: {
+    // Wird dynamisch berechnet: Abweichung aktuelleGesamtsumme vs. geplanteGesamtsummeProjekt.
+    //   'gruen' → 0 % Abweichung (Plan = Ist)
+    //   'gelb'  → 0 % < |Abweichung| < 5 %
+    //   'rot'   → |Abweichung| ≥ 5 %
+    //   null    → Projekt nicht aktiv oder kein Planwert vorhanden
+    farbeGeplanteGesamtsummeProjekt: {
       type: String,
       enum: ['gruen', 'gelb', 'rot', null],
       default: null,

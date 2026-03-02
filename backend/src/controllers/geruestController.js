@@ -1,5 +1,6 @@
 const Geruest = require('../models/Geruest');
 const { createAuditLog } = require('../middleware/auditLog');
+const { aktualisiereProjektFarbstatus } = require('../utils/farbstatus');
 
 // GET /api/v1/projects/:projectId/geruest
 exports.getGerueste = async (req, res, next) => {
@@ -20,6 +21,7 @@ exports.createGeruest = async (req, res, next) => {
       createdBy: req.user._id,
     });
     await createAuditLog({ userId: req.user._id, projectId: req.params.projectId, entityType: 'geruest', entityId: geruest._id, action: 'create', after: geruest.toJSON(), req });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.status(201).json({ success: true, data: geruest });
   } catch (err) { next(err); }
 };
@@ -35,6 +37,7 @@ exports.updateGeruest = async (req, res, next) => {
     if (!geruest) return res.status(404).json({ message: 'Gerüst nicht gefunden' });
     geruest.totalCost = +((geruest.areaSqm * geruest.rentalWeeks * geruest.pricePerSqmPerWeek) + geruest.assemblyDisassemblyCost).toFixed(2);
     await geruest.save();
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, data: geruest });
   } catch (err) { next(err); }
 };
@@ -44,6 +47,7 @@ exports.deleteGeruest = async (req, res, next) => {
   try {
     const geruest = await Geruest.findOneAndDelete({ _id: req.params.id, projectId: req.params.projectId });
     if (!geruest) return res.status(404).json({ message: 'Gerüst nicht gefunden' });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, message: 'Gerüst gelöscht' });
   } catch (err) { next(err); }
 };

@@ -2,6 +2,7 @@ const Container = require('../models/Container');
 const Position = require('../models/Position');
 const { suggestContainers } = require('../utils/calculations');
 const { createAuditLog } = require('../middleware/auditLog');
+const { aktualisiereProjektFarbstatus } = require('../utils/farbstatus');
 
 // GET /api/v1/projects/:projectId/containers
 exports.getContainers = async (req, res, next) => {
@@ -22,6 +23,7 @@ exports.createContainer = async (req, res, next) => {
       createdBy: req.user._id,
     });
     await createAuditLog({ userId: req.user._id, projectId: req.params.projectId, entityType: 'container', entityId: container._id, action: 'create', after: container.toJSON(), req });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.status(201).json({ success: true, data: container });
   } catch (err) { next(err); }
 };
@@ -38,6 +40,7 @@ exports.updateContainer = async (req, res, next) => {
     // totalCost neu berechnen
     container.totalCost = +(container.quantity * container.pricePerContainer).toFixed(2);
     await container.save();
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, data: container });
   } catch (err) { next(err); }
 };
@@ -47,6 +50,7 @@ exports.deleteContainer = async (req, res, next) => {
   try {
     const container = await Container.findOneAndDelete({ _id: req.params.id, projectId: req.params.projectId });
     if (!container) return res.status(404).json({ message: 'Container nicht gefunden' });
+    aktualisiereProjektFarbstatus(req.params.projectId).catch(() => {});
     res.json({ success: true, message: 'Container gelöscht' });
   } catch (err) { next(err); }
 };

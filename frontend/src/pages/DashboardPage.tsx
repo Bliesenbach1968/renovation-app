@@ -24,15 +24,15 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // Farbkonfiguration für geplanteGesamtsummeProjekt.
-// Die Farbe hängt vom Feld geplanteGesamtsummeFarbstatus ab, das das Backend berechnet:
-//   'gruen' → Plan = Ist bei Aktivierung (Ausgangszustand OK)
-//   'gelb'  → Abweichung ≥ 5 % und ≤ 30 % vom Referenzwert bei Aktivierung
-//   'rot'   → Abweichung > 30 % (starke Planüberschreitung oder -unterschreitung)
-//   null    → noch kein Referenzwert gesetzt, neutrale Darstellung
+// Die Farbe hängt vom Feld farbeGeplanteGesamtsummeProjekt ab, das das Backend berechnet:
+//   'gruen' → 0 % Abweichung (Plan = Ist)
+//   'gelb'  → 0 % < |Abweichung| < 5 % (geringe Abweichung)
+//   'rot'   → |Abweichung| ≥ 5 % (signifikante Abweichung)
+//   null    → Projekt nicht aktiv oder kein Planwert, neutrale Darstellung
 const GESAMTSUMME_FARBE: Record<string, { bg: string; text: string; ring: string; label: string }> = {
-  gruen: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-1 ring-emerald-200', label: 'Plan = Ist bei Aktivierung' },
-  gelb:  { bg: 'bg-amber-50',   text: 'text-amber-700',   ring: 'ring-1 ring-amber-200',   label: 'Abweichung ≥ 5 %' },
-  rot:   { bg: 'bg-red-50',     text: 'text-red-700',     ring: 'ring-1 ring-red-200',     label: 'Abweichung > 30 %' },
+  gruen: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-1 ring-emerald-200', label: 'Plan = Ist (0 % Abweichung)' },
+  gelb:  { bg: 'bg-amber-50',   text: 'text-amber-700',   ring: 'ring-1 ring-amber-200',   label: 'Abweichung < 5 %' },
+  rot:   { bg: 'bg-red-50',     text: 'text-red-700',     ring: 'ring-1 ring-red-200',     label: 'Abweichung ≥ 5 %' },
 };
 
 /**
@@ -106,8 +106,8 @@ function ProjectCard({ project, onDelete, isAdmin }: { project: Project; onDelet
           </span>
           {project.geplanteGesamtsummeProjekt != null && (() => {
             // Farbkonfiguration aus Statusfeld laden; null → neutrale Darstellung
-            const farbCfg = project.geplanteGesamtsummeFarbstatus
-              ? GESAMTSUMME_FARBE[project.geplanteGesamtsummeFarbstatus]
+            const farbCfg = project.farbeGeplanteGesamtsummeProjekt
+              ? GESAMTSUMME_FARBE[project.farbeGeplanteGesamtsummeProjekt]
               : null;
             const vollbetrag = fmtVoll(project.geplanteGesamtsummeProjekt);
             // Tooltip: Vollbetrag + ggf. Farbstatus-Label
