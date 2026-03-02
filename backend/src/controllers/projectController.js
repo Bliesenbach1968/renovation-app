@@ -350,6 +350,69 @@ exports.getTimeline = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Helper: Gesamtkosten einer Phase berechnen (Positionen + Container + Gerüst + Kran)
+async function calcPhaseTotal(projectId, phaseType) {
+  const pid = new mongoose.Types.ObjectId(projectId);
+  const match = { projectId: pid, phaseType };
+  const [posAgg, contAgg, gerAgg, kranAgg] = await Promise.all([
+    Position.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+    Container.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+    Geruest.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+    Kran.aggregate([{ $match: match }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+  ]);
+  return +(
+    (posAgg[0]?.total  || 0) +
+    (contAgg[0]?.total || 0) +
+    (gerAgg[0]?.total  || 0) +
+    (kranAgg[0]?.total || 0)
+  ).toFixed(2);
+}
+
+// PATCH /api/v1/projects/:id/phases/:phaseId — Phasenstatus ändern
+exports.updatePhaseStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ message: 'Status fehlt' });
+
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: 'Projekt nicht gefunden' });
+
+    const phase = project.phases.id(req.params.phaseId);
+    if (!phase) return res.status(404).json({ message: 'Phase nicht gefunden' });
+
+    const previousStatus = phase.status;
+    phase.status = status;
+
+    // Bei planned → active: aktuelle Phasensumme als geplante Phasensumme speichern
+    if (previousStatus === 'planned' && status === 'active') {
+      const phaseTotal = await calcPhaseTotal(req.params.id, phase.type);
+      const fieldMap = {
+        demolition:          'geplantePhasensummeEntkernung',
+        renovation:          'geplantePhasensummeRenovierung',
+        specialConstruction: 'geplantePhasensummeSonderarbeiten',
+      };
+      const field = fieldMap[phase.type];
+      if (field) project[field] = phaseTotal;
+
+      // Gesamtsumme aus allen bisher gespeicherten Phasensummen neu berechnen
+      const gesamtsumme =
+        (project.geplantePhasensummeEntkernung    || 0) +
+        (project.geplantePhasensummeRenovierung   || 0) +
+        (project.geplantePhasensummeSonderarbeiten || 0);
+      project.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
+    }
+
+    await project.save();
+
+    const populated = await Project.findById(project._id)
+      .populate('createdBy', 'name email')
+      .populate('team.userId', 'name email role');
+
+    await createAuditLog({ userId: req.user._id, projectId: project._id, entityType: 'project', entityId: project._id, action: 'update', after: populated.toJSON(), req });
+    res.json({ success: true, data: populated });
+  } catch (err) { next(err); }
+};
+
 // GET /api/v1/projects/:id/audit  — Änderungshistorie
 exports.getAuditLog = async (req, res, next) => {
   try {

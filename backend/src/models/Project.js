@@ -66,6 +66,12 @@ const projectSchema = new mongoose.Schema(
     tiefgarageStellplaetze: { type: Number, default: 0, min: 0 },
     aussenanlagenVorhanden: { type: Boolean, default: false },
 
+    // Geplante Phasensummen (werden bei planned→active Übergang gespeichert)
+    geplantePhasensummeEntkernung:     { type: Number, default: null },
+    geplantePhasensummeRenovierung:    { type: Number, default: null },
+    geplantePhasensummeSonderarbeiten: { type: Number, default: null },
+    geplanteGesamtsummeProjekt:        { type: Number, default: null },
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

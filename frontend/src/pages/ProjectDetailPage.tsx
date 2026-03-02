@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useForm, useWatch } from 'react-hook-form';
-import { getProject, updateProject, addTeamMember, removeTeamMember } from '../api/projects';
+import { getProject, updateProject, addTeamMember, removeTeamMember, updatePhaseStatus } from '../api/projects';
 import { getUsers } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 
@@ -158,11 +158,28 @@ export default function ProjectDetailPage() {
     { onSuccess: () => qc.invalidateQueries(['project', id]) }
   );
 
+  const phaseStatusMutation = useMutation(
+    ({ phaseId, status }: { phaseId: string; status: string }) =>
+      updatePhaseStatus(id!, phaseId, status),
+    { onSuccess: () => qc.invalidateQueries(['project', id]) }
+  );
+
   if (isLoading) return <div className="p-6"><div className="animate-pulse h-8 w-64 bg-gray-200 rounded mb-4" /></div>;
   if (!project) return <div className="p-6 text-red-600">Projekt nicht gefunden</div>;
 
   const st = PROJECT_STATUS[project.status];
   const sortedPhases = [...project.phases].sort((a, b) => a.order - b.order);
+
+  const PLANNED_SUM_FIELD: Record<string, keyof typeof project> = {
+    demolition:          'geplantePhasensummeEntkernung',
+    renovation:          'geplantePhasensummeRenovierung',
+    specialConstruction: 'geplantePhasensummeSonderarbeiten',
+  };
+  const NEXT_PHASE_STATUS: Record<string, { next: string; label: string }> = {
+    planned:  { next: 'active',    label: 'Aktivieren' },
+    active:   { next: 'completed', label: 'Abschließen' },
+  };
+  const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
   const hasKennzahlen = (project.anzahlWohnungen ?? 0) > 0
     || (project.anzahlGewerbe ?? 0) > 0
@@ -337,6 +354,9 @@ export default function ProjectDetailPage() {
           <div className="space-y-3">
             {sortedPhases.map((phase) => {
               const ps = PHASE_STATUS[phase.status];
+              const plannedSumField = PLANNED_SUM_FIELD[phase.type];
+              const plannedSum = plannedSumField != null ? (project as any)[plannedSumField] as number | null | undefined : undefined;
+              const nextStatus = NEXT_PHASE_STATUS[phase.status];
               return (
                 <Link key={phase._id} to={`/projects/${id}/building?phase=${phase.type}`}
                   className="card hover:shadow-md transition-shadow cursor-pointer flex items-center gap-4">
@@ -351,8 +371,28 @@ export default function ProjectDetailPage() {
                         {phase.timeline.plannedEnd && ` – ${new Date(phase.timeline.plannedEnd).toLocaleDateString('de-DE')}`}
                       </p>
                     )}
+                    {plannedSum != null && (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Geplante Summe: <span className="font-medium text-slate-700">{fmt(plannedSum)}</span>
+                      </p>
+                    )}
                   </div>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {nextStatus && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          phaseStatusMutation.mutate({ phaseId: phase._id, status: nextStatus.next });
+                        }}
+                        disabled={phaseStatusMutation.isLoading}
+                        className="btn btn-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm text-xs"
+                      >
+                        {nextStatus.label}
+                      </button>
+                    )}
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </div>
                 </Link>
               );
             })}

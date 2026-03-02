@@ -39,6 +39,10 @@ export const removeTeamMember = async (projectId: string, userId: string) => {
   const { data } = await client.delete(`/projects/${projectId}/team/${userId}`);
   return data.data as Project;
 };
+export const updatePhaseStatus = async (projectId: string, phaseId: string, status: string) => {
+  const { data } = await client.patch(`/projects/${projectId}/phases/${phaseId}`, { status });
+  return data.data as Project;
+};
 
 // === Etagen ===
 export const getFloors = async (projectId: string) => {

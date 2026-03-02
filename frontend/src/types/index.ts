@@ -49,6 +49,10 @@ export interface Project {
   tiefgarage?: boolean;
   tiefgarageStellplaetze?: number;
   aussenanlagenVorhanden?: boolean;
+  geplantePhasensummeEntkernung?: number | null;
+  geplantePhasensummeRenovierung?: number | null;
+  geplantePhasensummeSonderarbeiten?: number | null;
+  geplanteGesamtsummeProjekt?: number | null;
   createdBy: User;
   createdAt: string;
   updatedAt: string;

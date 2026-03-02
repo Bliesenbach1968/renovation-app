@@ -19,6 +19,8 @@ router.get('/:id/summary',  authorizeProjectAccess, projectController.getProject
 router.get('/:id/timeline', authorizeProjectAccess, projectController.getTimeline);
 router.get('/:id/audit',    authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.getAuditLog);
 
+router.patch('/:id/phases/:phaseId', authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.updatePhaseStatus);
+
 router.post('/:id/team',             authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.addTeamMember);
 router.delete('/:id/team/:userId',   authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.removeTeamMember);
 
