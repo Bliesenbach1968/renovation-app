@@ -168,11 +168,17 @@ exports.updateProject = async (req, res, next) => {
       }
     }
 
-    // Wenn Status auf 'active' gesetzt wird, alle Phasen ebenfalls auf 'active' setzen
-    if (req.body.status === 'active') {
+    // Phasenstatus automatisch synchronisieren wenn sich der Projektstatus ändert
+    const phaseStatusSync = {
+      active:    'active',     // Projekt aktiv → alle Phasen aktiv
+      planning:  'planned',    // Projekt in Planung → alle Phasen zurück auf geplant
+      'on-hold': 'planned',    // Projekt pausiert → alle Phasen zurück auf geplant
+      completed: 'completed',  // Projekt abgeschlossen → alle Phasen abgeschlossen
+    };
+    if (req.body.status && phaseStatusSync[req.body.status]) {
       await Project.updateOne(
         { _id: req.params.id },
-        { $set: { 'phases.$[].status': 'active' } }
+        { $set: { 'phases.$[].status': phaseStatusSync[req.body.status] } }
       );
       project = await Project.findById(req.params.id)
         .populate('createdBy', 'name email')
@@ -382,6 +388,13 @@ exports.updatePhaseStatus = async (req, res, next) => {
 
     const previousStatus = phase.status;
     phase.status = status;
+
+    // Projektstatus synchronisieren: Phase aktiv → Projekt aktiv; alle Phasen abgeschlossen → Projekt abgeschlossen
+    if (status === 'active' && (project.status === 'planning' || project.status === 'on-hold')) {
+      project.status = 'active';
+    } else if (status === 'completed' && project.phases.every((p) => p.status === 'completed')) {
+      project.status = 'completed';
+    }
 
     // Bei planned → active: aktuelle Phasensumme als geplante Phasensumme speichern
     if (previousStatus === 'planned' && status === 'active') {
