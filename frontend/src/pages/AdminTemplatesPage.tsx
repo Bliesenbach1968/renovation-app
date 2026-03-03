@@ -4,13 +4,8 @@ import { useForm } from 'react-hook-form';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplateApi } from '../api/projects';
 import { useAuth } from '../context/AuthContext';
 import type { PositionTemplate, PositionUnit, PhaseType } from '../types';
-import {
-  BEREICHE_STATIC,
-  BEREICHE_ENTKERNUNG_EXTRA,
-  BEREICHE_SONDERARBEITEN,
-  AUSSENANLAGE_UNTERPUNKTE,
-  BEREICH_UNTERPUNKTE,
-} from '../components/PositionForm';
+import { BEREICHE_SONDERARBEITEN } from '../components/PositionForm';
+import { BEREICHE_ENTKERNUNG_RENOVIERUNG, BEREICHE_HIERARCHIE } from '../data/bereiche';
 
 const UNITS: PositionUnit[] = ['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psch', 't'];
 const PHASE_LABELS: Record<string, string> = {
@@ -19,12 +14,12 @@ const PHASE_LABELS: Record<string, string> = {
 
 function getBereicheForPhaseAdmin(phase: string): string[] {
   if (phase === 'specialConstruction') return BEREICHE_SONDERARBEITEN;
-  return [...BEREICHE_STATIC, ...BEREICHE_ENTKERNUNG_EXTRA];
+  return BEREICHE_ENTKERNUNG_RENOVIERUNG;
 }
 
 interface FormValues {
   name: string; category: string; phaseType: string; unit: PositionUnit;
-  bereich: string; aussenanlageUnterpunkt: string; bereichUnterpunkt: string;
+  bereich: string; bereichUnterpunkt: string;
   materialCostPerUnit: number; disposalCostPerUnit: number;
   laborHoursPerUnit: number; laborHourlyRate: number; description: string;
 }
@@ -42,8 +37,31 @@ function TemplateForm({
   const watchedPhase = watch('phaseType');
   const watchedBereich = watch('bereich');
   const bereiche = getBereicheForPhaseAdmin(watchedPhase);
-  const showBereichUnterpunkt = watchedBereich ? watchedBereich in BEREICH_UNTERPUNKTE : false;
-  const bereichUnterpunktOptionen = watchedBereich ? (BEREICH_UNTERPUNKTE[watchedBereich] ?? []) : [];
+
+  // Cascading sub-levels
+  const initParts = (initial.bereichUnterpunkt || '').split(' > ').filter(Boolean);
+  const [sub1, setSub1] = useState(initParts[0] || '');
+  const [sub2, setSub2] = useState(initParts[1] || '');
+  const [sub3, setSub3] = useState(initParts[2] || '');
+
+  const sub1Options = watchedBereich ? (BEREICHE_HIERARCHIE[watchedBereich] ?? []) : [];
+  const sub1Node = sub1Options.find(n => n.label === sub1);
+  const sub2Options = sub1Node?.children ?? [];
+  const sub2Node = sub2Options.find(n => n.label === sub2);
+  const sub3Options = sub2Node?.children ?? [];
+
+  const handleSub1Change = (val: string) => {
+    setSub1(val); setSub2(''); setSub3('');
+    setValue('bereichUnterpunkt', val);
+  };
+  const handleSub2Change = (val: string) => {
+    setSub2(val); setSub3('');
+    setValue('bereichUnterpunkt', [sub1, val].filter(Boolean).join(' > '));
+  };
+  const handleSub3Change = (val: string) => {
+    setSub3(val);
+    setValue('bereichUnterpunkt', [sub1, sub2, val].filter(Boolean).join(' > '));
+  };
 
   return (
     <div className="border border-primary-200 bg-primary-50/30 rounded-xl p-4 mt-2 space-y-3">
@@ -67,27 +85,36 @@ function TemplateForm({
           <select
             {...register('bereich')}
             className="input"
-            onChange={(e) => { setValue('bereich', e.target.value); setValue('bereichUnterpunkt', ''); }}
+            onChange={(e) => { setValue('bereich', e.target.value); setValue('bereichUnterpunkt', ''); setSub1(''); setSub2(''); setSub3(''); }}
           >
             <option value="">– kein Bereich –</option>
             {bereiche.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
-        {showBereichUnterpunkt && (
+        {sub1Options.length > 0 && (
           <div>
-            <label className="label">{watchedBereich} – Unterpunkt</label>
-            <select {...register('bereichUnterpunkt')} className="input">
+            <label className="label">Unterkategorie</label>
+            <select value={sub1} onChange={(e) => handleSub1Change(e.target.value)} className="input">
               <option value="">– bitte wählen –</option>
-              {bereichUnterpunktOptionen.map((u) => <option key={u} value={u}>{u}</option>)}
+              {sub1Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
             </select>
           </div>
         )}
-        {watchedBereich === 'Außenanlage' && (
+        {sub1 && sub2Options.length > 0 && (
           <div>
-            <label className="label">Außenanlage – Unterpunkt</label>
-            <select {...register('aussenanlageUnterpunkt')} className="input">
+            <label className="label">Detail</label>
+            <select value={sub2} onChange={(e) => handleSub2Change(e.target.value)} className="input">
               <option value="">– bitte wählen –</option>
-              {AUSSENANLAGE_UNTERPUNKTE.map((u) => <option key={u} value={u}>{u}</option>)}
+              {sub2Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+            </select>
+          </div>
+        )}
+        {sub2 && sub3Options.length > 0 && (
+          <div>
+            <label className="label">Spezifikation</label>
+            <select value={sub3} onChange={(e) => handleSub3Change(e.target.value)} className="input">
+              <option value="">– bitte wählen –</option>
+              {sub3Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
             </select>
           </div>
         )}
@@ -180,15 +207,14 @@ export default function AdminTemplatesPage() {
 
   const toFormValues = (t: PositionTemplate): FormValues => ({
     name: t.name, category: t.category, phaseType: t.phaseType,
-    unit: t.unit, bereich: t.bereich || '', aussenanlageUnterpunkt: t.aussenanlageUnterpunkt || '',
+    unit: t.unit, bereich: t.bereich || '',
     bereichUnterpunkt: t.bereichUnterpunkt || '',
     materialCostPerUnit: t.materialCostPerUnit,
     disposalCostPerUnit: t.disposalCostPerUnit, laborHoursPerUnit: t.laborHoursPerUnit,
     laborHourlyRate: t.laborHourlyRate, description: t.description || '',
   });
 
-  // Bereiche for filter: all static bereiche
-  const allBereiche = [...BEREICHE_STATIC, ...BEREICHE_ENTKERNUNG_EXTRA];
+  const allBereiche = [...BEREICHE_ENTKERNUNG_RENOVIERUNG, ...BEREICHE_SONDERARBEITEN];
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -216,14 +242,13 @@ export default function AdminTemplatesPage() {
         <div className="card mb-6">
           <h2 className="font-semibold mb-4">Neue Vorlage anlegen</h2>
           <TemplateForm
-            initial={{ phaseType: 'demolition', unit: 'm²', bereich: '', aussenanlageUnterpunkt: '', bereichUnterpunkt: '', materialCostPerUnit: 0, disposalCostPerUnit: 0, laborHoursPerUnit: 0, laborHourlyRate: 45 }}
+            initial={{ phaseType: 'demolition', unit: 'm²', bereich: '', bereichUnterpunkt: '', materialCostPerUnit: 0, disposalCostPerUnit: 0, laborHoursPerUnit: 0, laborHourlyRate: 45 }}
             isSystem={false}
             onSaveNew={(data) => createMutation.mutate({
               ...data,
               phaseType: data.phaseType as PhaseType | 'all',
               bereich: data.bereich || undefined,
-              aussenanlageUnterpunkt: data.bereich === 'Außenanlage' ? (data.aussenanlageUnterpunkt || undefined) : undefined,
-              bereichUnterpunkt: (data.bereich && data.bereich in BEREICH_UNTERPUNKTE) ? (data.bereichUnterpunkt || undefined) : undefined,
+              bereichUnterpunkt: data.bereichUnterpunkt || undefined,
               isSystemDefault: false,
             })}
             onCancel={() => setShowNewForm(false)}
@@ -252,7 +277,7 @@ export default function AdminTemplatesPage() {
                           {t.bereich && (
                             <span className="badge bg-violet-50 text-violet-600 text-xs shrink-0">
                               {t.bereich}
-                              {t.bereichUnterpunkt ? ` · ${t.bereichUnterpunkt}` : t.aussenanlageUnterpunkt ? ` · ${t.aussenanlageUnterpunkt}` : ''}
+                              {t.bereichUnterpunkt ? ` · ${t.bereichUnterpunkt}` : ''}
                             </span>
                           )}
                         </div>
@@ -287,8 +312,7 @@ export default function AdminTemplatesPage() {
                           ...data,
                           phaseType: data.phaseType as PhaseType | 'all',
                           bereich: data.bereich || undefined,
-                          aussenanlageUnterpunkt: data.bereich === 'Außenanlage' ? (data.aussenanlageUnterpunkt || undefined) : undefined,
-                          bereichUnterpunkt: (data.bereich && data.bereich in BEREICH_UNTERPUNKTE) ? (data.bereichUnterpunkt || undefined) : undefined,
+                          bereichUnterpunkt: data.bereichUnterpunkt || undefined,
                           isSystemDefault: false,
                         })}
                         onUpdate={!t.isSystemDefault ? (data) => updateMutation.mutate({
@@ -297,8 +321,7 @@ export default function AdminTemplatesPage() {
                             ...data,
                             phaseType: data.phaseType as PhaseType | 'all',
                             bereich: data.bereich || undefined,
-                            aussenanlageUnterpunkt: data.bereich === 'Außenanlage' ? (data.aussenanlageUnterpunkt || undefined) : undefined,
-                            bereichUnterpunkt: (data.bereich && data.bereich in BEREICH_UNTERPUNKTE) ? (data.bereichUnterpunkt || undefined) : undefined,
+                            bereichUnterpunkt: data.bereichUnterpunkt || undefined,
                           },
                         }) : undefined}
                         onCancel={() => setEditingId(null)}

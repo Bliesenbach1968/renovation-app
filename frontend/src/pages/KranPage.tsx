@@ -8,9 +8,6 @@ function eur(n: number) {
   return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 }
 
-const PHASE_NAMES: Record<string, string> = {
-  demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
-};
 
 const KRAN_TYPES = ['Turmdrehkran', 'Mobilkran', 'Autokran', 'Raupenkran', 'Sonstiges'];
 
@@ -102,7 +99,6 @@ export default function KranPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="table-cell text-left font-medium text-gray-600">Typ</th>
-                  <th className="table-cell text-left font-medium text-gray-600">Phase</th>
                   <th className="table-cell text-right font-medium text-gray-600">Miettage</th>
                   <th className="table-cell text-right font-medium text-gray-600">Preis/Tag</th>
                   <th className="table-cell text-right font-medium text-gray-600">Fahrer/Tag</th>
@@ -114,7 +110,6 @@ export default function KranPage() {
                 {kraene.map((k) => (
                   <tr key={k._id} className={`hover:bg-gray-50 group ${editItem?._id === k._id ? 'bg-primary-50' : ''}`}>
                     <td className="table-cell">{k.type}</td>
-                    <td className="table-cell text-gray-500">{PHASE_NAMES[k.phaseType] ?? k.phaseType}</td>
                     <td className="table-cell text-right">{k.rentalDays}</td>
                     <td className="table-cell text-right">{eur(k.pricePerDay)}</td>
                     <td className="table-cell text-right">{eur(k.operatorCostPerDay)}</td>
@@ -166,7 +161,7 @@ function KranForm({
     rentalDays:         initial?.rentalDays         ?? 10,
     pricePerDay:        initial?.pricePerDay        ?? 800,
     operatorCostPerDay: initial?.operatorCostPerDay ?? 350,
-    phaseType:          initial?.phaseType          ?? 'demolition',
+    phaseType:          'specialConstruction',
     notes:              initial?.notes              ?? '',
   });
 
@@ -182,14 +177,6 @@ function KranForm({
           <label className="label">Typ</label>
           <select value={form.type} onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))} className="input">
             {KRAN_TYPES.map(t => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">Phase</label>
-          <select value={form.phaseType} onChange={(e) => setForm(f => ({ ...f, phaseType: e.target.value }))} className="input">
-            <option value="demolition">Entkernung</option>
-            <option value="renovation">Renovierung</option>
-            <option value="specialConstruction">Sonderarbeiten</option>
           </select>
         </div>
         <div>

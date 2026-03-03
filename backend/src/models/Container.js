@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const containerSchema = new mongoose.Schema(
   {
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
-    phaseType: { type: String, enum: ['demolition', 'renovation'], default: 'demolition' },
+    phaseType: { type: String, enum: ['demolition', 'renovation', 'specialConstruction'], default: 'specialConstruction' },
     type: {
       type: String,
       enum: ['Bauschutt', 'GemischterAbfall', 'Sondermuell', 'Holz', 'Metall'],

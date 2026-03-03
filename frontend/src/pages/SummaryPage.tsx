@@ -2,8 +2,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getProject, getProjectSummary, getContainers, getGerueste, getKraene } from '../api/projects';
-import type { Container, Geruest, Kran, ProjectSummary, Project } from '../types';
+import { getProject, getProjectSummary } from '../api/projects';
+import type { ProjectSummary, Project } from '../types';
 
 function eur(n: number) {
   return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -24,9 +24,6 @@ function PhaseCard({ phase, data }: { phase: string; data: any }) {
         <div className="flex justify-between"><span className="text-gray-500">Materialkosten</span><span>{eur(data.materialCost)}</span></div>
         <div className="flex justify-between"><span className="text-gray-500">Entsorgungskosten</span><span>{eur(data.disposalCost)}</span></div>
         <div className="flex justify-between"><span className="text-gray-500">Arbeitskosten</span><span>{eur(data.laborCost)}</span></div>
-        {data.containerCost > 0 && <div className="flex justify-between"><span className="text-gray-500">Container/Entsorgung</span><span>{eur(data.containerCost)}</span></div>}
-        {data.geruestCost > 0 && <div className="flex justify-between"><span className="text-gray-500">Gerüst</span><span>{eur(data.geruestCost)}</span></div>}
-        {data.kranCost > 0 && <div className="flex justify-between"><span className="text-gray-500">Kran</span><span>{eur(data.kranCost)}</span></div>}
         <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-2 mt-2">
           <span>Phasensumme</span><span className="text-primary-700">{eur(data.subtotal)}</span>
         </div>
@@ -44,13 +41,7 @@ const PHASE_ORDER: Array<'demolition' | 'renovation' | 'specialConstruction'> = 
   'demolition', 'renovation', 'specialConstruction',
 ];
 
-function downloadPDF(
-  project: Project,
-  summary: ProjectSummary,
-  containers: Container[],
-  gerueste: Geruest[],
-  kraene: Kran[],
-) {
+function downloadPDF(project: Project, summary: ProjectSummary) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 15;
@@ -87,29 +78,6 @@ function downloadPDF(
       ['Entsorgungskosten', eur(d.disposalCost)],
       ['Arbeitskosten', eur(d.laborCost)],
     ];
-
-    const phaseContainers = containers.filter((c) => c.phaseType === phase);
-    const phaseGerueste  = gerueste.filter((g) => g.phaseType === phase);
-    const phaseKraene    = kraene.filter((k) => k.phaseType === phase);
-
-    if (d.containerCost > 0) {
-      costRows.push(['Container & Entsorgung', eur(d.containerCost)]);
-      phaseContainers.forEach((c) =>
-        costRows.push([`   ${c.type}  –  ${c.sizeCubicMeters} m³  ×  ${c.quantity}`, eur(c.totalCost)])
-      );
-    }
-    if (d.geruestCost > 0) {
-      costRows.push(['Gerüst', eur(d.geruestCost)]);
-      phaseGerueste.forEach((g) =>
-        costRows.push([`   ${g.type}  –  ${g.areaSqm} m²  ×  ${g.rentalWeeks} Wo.`, eur(g.totalCost)])
-      );
-    }
-    if (d.kranCost > 0) {
-      costRows.push(['Kran', eur(d.kranCost)]);
-      phaseKraene.forEach((k) =>
-        costRows.push([`   ${k.type}  –  ${k.rentalDays} Tage`, eur(k.totalCost)])
-      );
-    }
 
     autoTable(doc, {
       startY: y,
@@ -148,10 +116,6 @@ function downloadPDF(
     ['Entsorgungskosten', eur(t.disposalCost)],
     ['Arbeitskosten', eur(t.laborCost)],
   ];
-  if (t.containerCost > 0) totalRows.push(['Container & Entsorgung', eur(t.containerCost)]);
-  if (t.geruestCost > 0)   totalRows.push(['Gerüst', eur(t.geruestCost)]);
-  if (t.kranCost > 0)      totalRows.push(['Kran', eur(t.kranCost)]);
-
   // Seitenumbruch wenn nötig
   if (y + 10 + totalRows.length * 8 + 20 > 280) {
     doc.addPage();
@@ -202,10 +166,6 @@ export default function SummaryPage() {
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: summary, isLoading } = useQuery(['summary', projectId], () => getProjectSummary(projectId!), { refetchInterval: 10_000 });
-  const { data: containers = [] } = useQuery(['containers', projectId], () => getContainers(projectId!));
-  const { data: gerueste = [] } = useQuery(['gerueste', projectId], () => getGerueste(projectId!));
-  const { data: kraene = [] } = useQuery(['kraene', projectId], () => getKraene(projectId!));
-
   if (isLoading) return <div className="p-6"><div className="animate-pulse h-8 w-64 bg-gray-200 rounded" /></div>;
 
   const phases = summary?.phases;
@@ -219,7 +179,7 @@ export default function SummaryPage() {
         <span className="text-gray-400 text-sm hidden sm:inline">{project?.name}</span>
         <div className="ml-auto">
           <button
-            onClick={() => project && summary && downloadPDF(project, summary, containers, gerueste, kraene)}
+            onClick={() => project && summary && downloadPDF(project, summary)}
             disabled={!summary || !project}
             className="inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
@@ -265,123 +225,15 @@ export default function SummaryPage() {
         ))}
       </div>
 
-      {/* Container & Entsorgung */}
-      {totals && (
-        <div className="card border-l-4 border-l-amber-500 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Container & Entsorgung</h3>
-            <Link to={`/projects/${projectId}/containers`} className="text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded px-2 py-0.5 hover:bg-primary-50 transition-colors">
-              Verwalten →
-            </Link>
-          </div>
-          <div className="space-y-2 text-sm">
-            {(['demolition', 'renovation', 'specialConstruction'] as const).map((phase) => {
-              const cost = phases?.[phase]?.containerCost ?? 0;
-              if (cost === 0) return null;
-              return (
-                <div key={phase} className="flex justify-between">
-                  <span className="text-gray-500">{PHASE_NAMES[phase]}</span>
-                  <span>{eur(cost)}</span>
-                </div>
-              );
-            })}
-            {containers.length === 0 && (
-              <p className="text-gray-400 text-xs">Noch keine Container gebucht –{' '}
-                <Link to={`/projects/${projectId}/containers`} className="text-primary-600 hover:underline">jetzt buchen</Link>
-              </p>
-            )}
-            {totals.containerCost > 0 && (
-              <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-2 mt-2">
-                <span>Summe Container</span>
-                <span className="text-amber-700">{eur(totals.containerCost)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Gerüst */}
-      {totals && (
-        <div className="card border-l-4 border-l-orange-500 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Gerüst</h3>
-            <Link to={`/projects/${projectId}/geruest`} className="text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded px-2 py-0.5 hover:bg-primary-50 transition-colors">
-              Verwalten →
-            </Link>
-          </div>
-          <div className="space-y-2 text-sm">
-            {(['demolition', 'renovation', 'specialConstruction'] as const).map((phase) => {
-              const cost = phases?.[phase]?.geruestCost ?? 0;
-              if (cost === 0) return null;
-              return (
-                <div key={phase} className="flex justify-between">
-                  <span className="text-gray-500">{PHASE_NAMES[phase]}</span>
-                  <span>{eur(cost)}</span>
-                </div>
-              );
-            })}
-            {gerueste.length === 0 && (
-              <p className="text-gray-400 text-xs">Noch kein Gerüst gebucht –{' '}
-                <Link to={`/projects/${projectId}/geruest`} className="text-primary-600 hover:underline">jetzt buchen</Link>
-              </p>
-            )}
-            {totals.geruestCost > 0 && (
-              <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-2 mt-2">
-                <span>Summe Gerüst</span>
-                <span className="text-orange-700">{eur(totals.geruestCost)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Kran */}
-      {totals && (
-        <div className="card border-l-4 border-l-purple-500 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Kran</h3>
-            <Link to={`/projects/${projectId}/kran`} className="text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded px-2 py-0.5 hover:bg-primary-50 transition-colors">
-              Verwalten →
-            </Link>
-          </div>
-          <div className="space-y-2 text-sm">
-            {(['demolition', 'renovation', 'specialConstruction'] as const).map((phase) => {
-              const cost = phases?.[phase]?.kranCost ?? 0;
-              if (cost === 0) return null;
-              return (
-                <div key={phase} className="flex justify-between">
-                  <span className="text-gray-500">{PHASE_NAMES[phase]}</span>
-                  <span>{eur(cost)}</span>
-                </div>
-              );
-            })}
-            {kraene.length === 0 && (
-              <p className="text-gray-400 text-xs">Noch kein Kran gebucht –{' '}
-                <Link to={`/projects/${projectId}/kran`} className="text-primary-600 hover:underline">jetzt buchen</Link>
-              </p>
-            )}
-            {totals.kranCost > 0 && (
-              <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-2 mt-2">
-                <span>Summe Kran</span>
-                <span className="text-purple-700">{eur(totals.kranCost)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Gesamtkosten */}
       {totals && (
         <div className="card bg-primary-50 border border-primary-200 mb-6">
           <h3 className="font-bold text-primary-900 text-lg mb-4">Gesamtkosten Projekt</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 text-center">
             {[
               { label: 'Materialkosten', val: totals.materialCost },
               { label: 'Entsorgungskosten', val: totals.disposalCost },
               { label: 'Arbeitskosten', val: totals.laborCost },
-              { label: 'Containerkosten', val: totals.containerCost },
-              { label: 'Gerüstkosten', val: totals.geruestCost },
-              { label: 'Krankosten', val: totals.kranCost },
             ].map((item) => (
               <div key={item.label} className="bg-white rounded-lg p-3 border border-primary-100">
                 <p className="text-xs text-primary-600 mb-1">{item.label}</p>

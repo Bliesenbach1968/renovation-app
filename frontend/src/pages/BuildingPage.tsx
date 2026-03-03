@@ -4,9 +4,12 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import {
   getProject, getFloors, getRooms, createFloor, createRoom, deleteRoom, deleteFloor,
   getUnits, createUnit, deleteUnit, getTemplates, getPositions, deletePosition,
+  getContainers, createContainer, updateContainer, deleteContainer,
+  getGerueste, createGeruest, updateGeruest, deleteGeruest,
+  getKraene, createKran, updateKran, deleteKran,
 } from '../api/projects';
-import type { Floor, Unit, Room, PhaseType, PositionTemplate, Position } from '../types';
-import PositionForm, { getBereicheForPhase, BEREICH_UNTERPUNKTE } from '../components/PositionForm';
+import type { Floor, Unit, Room, PhaseType, PositionTemplate, Position, Container, Geruest, Kran } from '../types';
+import PositionForm, { getBereicheForPhase } from '../components/PositionForm';
 
 const ROOM_TYPE_LABELS: Record<string, string> = {
   livingRoom: 'Wohnzimmer', bedroom: 'Schlafzimmer', bathroom: 'Bad/WC',
@@ -27,6 +30,245 @@ const LEVEL_NAMES: Record<number, string> = {
   16: '16. Obergeschoss', 17: '17. Obergeschoss', 18: '18. Obergeschoss',
   19: '19. Obergeschoss', 20: 'Dachgeschoss',
 };
+
+const CONTAINER_TYPES = ['Bauschutt', 'GemischterAbfall', 'Sondermuell', 'Holz', 'Metall'];
+const GERUEST_TYPES = ['Fassadengerüst', 'Innengerüst', 'Hängegerüst', 'Schutzgerüst', 'Traggerüst', 'Raumgerüst', 'Arbeitsgerüst', 'Sonstiges'];
+const KRAN_TYPES = ['Turmdrehkran', 'Mobilkran', 'Autokran', 'Raupenkran', 'Sonstiges'];
+function eur(n: number) { return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }); }
+
+function ContainerPanel({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<Container | null>(null);
+  const { data: items = [] } = useQuery(['containers', projectId], () => getContainers(projectId));
+  const inv = () => { qc.invalidateQueries(['containers', projectId]); qc.invalidateQueries(['summary', projectId]); };
+  const addMut = useMutation((b: any) => createContainer(projectId, b), { onSuccess: () => { inv(); setShowForm(false); } });
+  const editMut = useMutation(({ id, b }: any) => updateContainer(projectId, id, b), { onSuccess: () => { inv(); setShowForm(false); setEditItem(null); } });
+  const delMut = useMutation((id: string) => deleteContainer(projectId, id), { onSuccess: inv });
+
+  const [form, setForm] = useState({ type: 'Bauschutt', sizeCubicMeters: 10, quantity: 1, pricePerContainer: 350, notes: '' });
+
+  function openNew() { setEditItem(null); setForm({ type: 'Bauschutt', sizeCubicMeters: 10, quantity: 1, pricePerContainer: 350, notes: '' }); setShowForm(true); }
+  function openEdit(c: Container) { setEditItem(c); setForm({ type: c.type, sizeCubicMeters: c.sizeCubicMeters, quantity: c.quantity, pricePerContainer: c.pricePerContainer, notes: c.notes ?? '' }); setShowForm(true); }
+  function submit() {
+    const body = { ...form, phaseType: 'specialConstruction' };
+    if (editItem) editMut.mutate({ id: editItem._id, b: body });
+    else addMut.mutate(body);
+  }
+
+  const total = (items as Container[]).reduce((s, c) => s + c.totalCost, 0);
+  return (
+    <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
+      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />Container & Entsorgung
+      </h3>
+      {showForm && (
+        <div className="border border-primary-200 rounded-lg p-3 mb-3 bg-white space-y-2">
+          {editItem && <p className="text-xs font-semibold text-primary-700 uppercase tracking-wide">Bearbeiten</p>}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div><label className="label">Typ</label>
+              <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className="input">
+                {CONTAINER_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select></div>
+            <div><label className="label">Größe (m³)</label>
+              <select value={form.sizeCubicMeters} onChange={e => setForm(f => ({ ...f, sizeCubicMeters: +e.target.value }))} className="input">
+                {[5,7,10,20].map(s => <option key={s} value={s}>{s} m³</option>)}
+              </select></div>
+            <div><label className="label">Anzahl</label>
+              <input type="number" min="1" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Preis/Stk (€)</label>
+              <input type="number" step="0.01" value={form.pricePerContainer} onChange={e => setForm(f => ({ ...f, pricePerContainer: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Notiz</label>
+              <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="input" placeholder="Optional" /></div>
+          </div>
+          <p className="text-sm text-primary-700 font-medium">{eur(form.quantity * form.pricePerContainer)}</p>
+          <div className="flex gap-2">
+            <button onClick={submit} className="btn-primary btn-sm">{editItem ? 'Speichern' : 'Buchen'}</button>
+            <button onClick={() => { setShowForm(false); setEditItem(null); }} className="btn-secondary btn-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+      <button onClick={openNew} className="btn-primary w-full text-sm py-2 mb-3">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+        + Container buchen
+      </button>
+      {(items as Container[]).length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider pb-0.5">Gebuchte Container ({(items as Container[]).length})</p>
+          {(items as Container[]).map(c => (
+            <div key={c._id} className="group flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-slate-800">{c.type} – {c.sizeCubicMeters} m³</span>
+                <span className="text-xs text-slate-400 block">{c.quantity}× · {eur(c.totalCost)}</span>
+              </div>
+              <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => openEdit(c)} className="text-xs px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600">✏</button>
+                <button onClick={() => { if (confirm('Container löschen?')) delMut.mutate(c._id); }} className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600">✕</button>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-1 text-sm font-semibold text-slate-700">Gesamt: <span className="ml-2 text-primary-700">{eur(total)}</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GeruestPanel({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<Geruest | null>(null);
+  const { data: items = [] } = useQuery(['gerueste', projectId], () => getGerueste(projectId));
+  const inv = () => { qc.invalidateQueries(['gerueste', projectId]); qc.invalidateQueries(['summary', projectId]); };
+  const addMut = useMutation((b: any) => createGeruest(projectId, b), { onSuccess: () => { inv(); setShowForm(false); } });
+  const editMut = useMutation(({ id, b }: any) => updateGeruest(projectId, id, b), { onSuccess: () => { inv(); setShowForm(false); setEditItem(null); } });
+  const delMut = useMutation((id: string) => deleteGeruest(projectId, id), { onSuccess: inv });
+
+  const [form, setForm] = useState({ type: 'Fassadengerüst', areaSqm: 100, rentalWeeks: 4, pricePerSqmPerWeek: 2.5, assemblyDisassemblyCost: 500, notes: '' });
+
+  function openNew() { setEditItem(null); setForm({ type: 'Fassadengerüst', areaSqm: 100, rentalWeeks: 4, pricePerSqmPerWeek: 2.5, assemblyDisassemblyCost: 500, notes: '' }); setShowForm(true); }
+  function openEdit(g: Geruest) { setEditItem(g); setForm({ type: g.type, areaSqm: g.areaSqm, rentalWeeks: g.rentalWeeks, pricePerSqmPerWeek: g.pricePerSqmPerWeek, assemblyDisassemblyCost: g.assemblyDisassemblyCost, notes: g.notes ?? '' }); setShowForm(true); }
+  function submit() {
+    const body = { ...form, phaseType: 'specialConstruction' };
+    if (editItem) editMut.mutate({ id: editItem._id, b: body });
+    else addMut.mutate(body);
+  }
+  const preview = +(form.areaSqm * form.rentalWeeks * form.pricePerSqmPerWeek + form.assemblyDisassemblyCost).toFixed(2);
+  const total = (items as Geruest[]).reduce((s, g) => s + g.totalCost, 0);
+  return (
+    <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
+      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />Gerüst
+      </h3>
+      {showForm && (
+        <div className="border border-primary-200 rounded-lg p-3 mb-3 bg-white space-y-2">
+          {editItem && <p className="text-xs font-semibold text-primary-700 uppercase tracking-wide">Bearbeiten</p>}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div><label className="label">Typ</label>
+              <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className="input">
+                {GERUEST_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select></div>
+            <div><label className="label">Fläche (m²)</label>
+              <input type="number" step="0.1" value={form.areaSqm} onChange={e => setForm(f => ({ ...f, areaSqm: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Mietwochen</label>
+              <input type="number" min="1" value={form.rentalWeeks} onChange={e => setForm(f => ({ ...f, rentalWeeks: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Preis/m²/Wo. (€)</label>
+              <input type="number" step="0.01" value={form.pricePerSqmPerWeek} onChange={e => setForm(f => ({ ...f, pricePerSqmPerWeek: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Auf-/Abbau (€)</label>
+              <input type="number" step="0.01" value={form.assemblyDisassemblyCost} onChange={e => setForm(f => ({ ...f, assemblyDisassemblyCost: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Notiz</label>
+              <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="input" placeholder="Optional" /></div>
+          </div>
+          <p className="text-sm text-primary-700 font-medium">{eur(preview)}</p>
+          <div className="flex gap-2">
+            <button onClick={submit} className="btn-primary btn-sm">{editItem ? 'Speichern' : 'Buchen'}</button>
+            <button onClick={() => { setShowForm(false); setEditItem(null); }} className="btn-secondary btn-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+      <button onClick={openNew} className="btn-primary w-full text-sm py-2 mb-3">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+        + Gerüst buchen
+      </button>
+      {(items as Geruest[]).length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider pb-0.5">Gebuchte Gerüste ({(items as Geruest[]).length})</p>
+          {(items as Geruest[]).map(g => (
+            <div key={g._id} className="group flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-slate-800">{g.type}</span>
+                <span className="text-xs text-slate-400 block">{g.areaSqm} m² · {g.rentalWeeks} Wo. · {eur(g.totalCost)}</span>
+              </div>
+              <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => openEdit(g)} className="text-xs px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600">✏</button>
+                <button onClick={() => { if (confirm('Gerüst löschen?')) delMut.mutate(g._id); }} className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600">✕</button>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-1 text-sm font-semibold text-slate-700">Gesamt: <span className="ml-2 text-primary-700">{eur(total)}</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KranPanel({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<Kran | null>(null);
+  const { data: items = [] } = useQuery(['kraene', projectId], () => getKraene(projectId));
+  const inv = () => { qc.invalidateQueries(['kraene', projectId]); qc.invalidateQueries(['summary', projectId]); };
+  const addMut = useMutation((b: any) => createKran(projectId, b), { onSuccess: () => { inv(); setShowForm(false); } });
+  const editMut = useMutation(({ id, b }: any) => updateKran(projectId, id, b), { onSuccess: () => { inv(); setShowForm(false); setEditItem(null); } });
+  const delMut = useMutation((id: string) => deleteKran(projectId, id), { onSuccess: inv });
+
+  const [form, setForm] = useState({ type: 'Turmdrehkran', rentalDays: 10, pricePerDay: 800, operatorCostPerDay: 350, notes: '' });
+
+  function openNew() { setEditItem(null); setForm({ type: 'Turmdrehkran', rentalDays: 10, pricePerDay: 800, operatorCostPerDay: 350, notes: '' }); setShowForm(true); }
+  function openEdit(k: Kran) { setEditItem(k); setForm({ type: k.type, rentalDays: k.rentalDays, pricePerDay: k.pricePerDay, operatorCostPerDay: k.operatorCostPerDay, notes: k.notes ?? '' }); setShowForm(true); }
+  function submit() {
+    const body = { ...form, phaseType: 'specialConstruction' };
+    if (editItem) editMut.mutate({ id: editItem._id, b: body });
+    else addMut.mutate(body);
+  }
+  const preview = +(form.rentalDays * (form.pricePerDay + form.operatorCostPerDay)).toFixed(2);
+  const total = (items as Kran[]).reduce((s, k) => s + k.totalCost, 0);
+  return (
+    <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
+      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />Kran
+      </h3>
+      {showForm && (
+        <div className="border border-primary-200 rounded-lg p-3 mb-3 bg-white space-y-2">
+          {editItem && <p className="text-xs font-semibold text-primary-700 uppercase tracking-wide">Bearbeiten</p>}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div><label className="label">Typ</label>
+              <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className="input">
+                {KRAN_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select></div>
+            <div><label className="label">Miettage</label>
+              <input type="number" min="1" value={form.rentalDays} onChange={e => setForm(f => ({ ...f, rentalDays: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Preis/Tag (€)</label>
+              <input type="number" step="0.01" value={form.pricePerDay} onChange={e => setForm(f => ({ ...f, pricePerDay: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Fahrer/Tag (€)</label>
+              <input type="number" step="0.01" value={form.operatorCostPerDay} onChange={e => setForm(f => ({ ...f, operatorCostPerDay: +e.target.value }))} className="input" /></div>
+            <div><label className="label">Notiz</label>
+              <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="input" placeholder="Optional" /></div>
+          </div>
+          <p className="text-sm text-primary-700 font-medium">{eur(preview)}</p>
+          <div className="flex gap-2">
+            <button onClick={submit} className="btn-primary btn-sm">{editItem ? 'Speichern' : 'Buchen'}</button>
+            <button onClick={() => { setShowForm(false); setEditItem(null); }} className="btn-secondary btn-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+      <button onClick={openNew} className="btn-primary w-full text-sm py-2 mb-3">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+        + Kran buchen
+      </button>
+      {(items as Kran[]).length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider pb-0.5">Gebuchte Kräne ({(items as Kran[]).length})</p>
+          {(items as Kran[]).map(k => (
+            <div key={k._id} className="group flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-slate-800">{k.type}</span>
+                <span className="text-xs text-slate-400 block">{k.rentalDays} Tage · {eur(k.totalCost)}</span>
+              </div>
+              <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => openEdit(k)} className="text-xs px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600">✏</button>
+                <button onClick={() => { if (confirm('Kran löschen?')) delMut.mutate(k._id); }} className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600">✕</button>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-1 text-sm font-semibold text-slate-700">Gesamt: <span className="ml-2 text-primary-700">{eur(total)}</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SPECIAL_BEREICHE = ['Container & Entsorgung', 'Gerüst', 'Kran'];
 
 function BereichPositionsPanel({
   projectId, phase, bereich, unterpunkt, onAdd, onEdit,
@@ -263,8 +505,6 @@ export default function BuildingPage() {
   const selectedPhase = searchParams.get('phase') || 'demolition';
   const selectedBereich = searchParams.get('bereich') || '';
   const selectedUnterpunkt = searchParams.get('unterpunkt') || '';
-  const [expandedBereich, setExpandedBereich] = useState('');
-
   const setBereich = (b: string, unterpunkt?: string) => {
     const next = new URLSearchParams(searchParams);
     if (b) next.set('bereich', b); else next.delete('bereich');
@@ -417,7 +657,7 @@ export default function BuildingPage() {
       <div className="flex items-center gap-2 py-3 mb-3 flex-wrap">
         <span className="text-xs text-gray-500 font-medium shrink-0">Bereich:</span>
         <button
-          onClick={() => { setBereich(''); setExpandedBereich(''); }}
+          onClick={() => setBereich('')}
           className={`text-xs px-3 py-1 rounded-full border transition-colors ${
             !selectedBereich
               ? 'bg-gray-800 text-white border-gray-800'
@@ -427,62 +667,13 @@ export default function BuildingPage() {
           Alle
         </button>
         {bereiche.map((b) => {
-          const subItems = BEREICH_UNTERPUNKTE[b];
-          const isExpanded = expandedBereich === b;
-          const isParentActive = selectedBereich === b;
-
+          const isActive = selectedBereich === b;
           const count = bereichCount[b] || 0;
-
-          if (subItems) {
-            return (
-              <>
-                <button key={b}
-                  onClick={() => setExpandedBereich(isExpanded ? '' : b)}
-                  className={`text-xs px-3 py-1 rounded-full border transition-colors flex items-center gap-1 ${
-                    isParentActive
-                      ? 'bg-primary-600 text-white border-primary-600'
-                      : isExpanded
-                      ? 'bg-primary-50 text-primary-700 border-primary-300'
-                      : count > 0
-                      ? 'bg-primary-50 text-primary-700 border-primary-300 hover:border-primary-500'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-primary-400'
-                  }`}
-                >
-                  {b}
-                  {count > 0 && !isParentActive && (
-                    <span className="text-[10px] font-semibold bg-primary-500 text-white rounded-full px-1.5 py-0 leading-4 min-w-[18px] text-center">
-                      {count}
-                    </span>
-                  )}
-                  <span className={`text-[10px] inline-block transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
-                </button>
-                {isExpanded && subItems.map((sub) => {
-                  const isSubActive = selectedBereich === b && selectedUnterpunkt === sub;
-                  return (
-                    <button key={sub}
-                      onClick={() => {
-                        if (isSubActive) { setBereich(''); setExpandedBereich(''); }
-                        else { setBereich(b, sub); setExpandedBereich(''); }
-                      }}
-                      className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                        isSubActive
-                          ? 'bg-primary-600 text-white border-primary-600'
-                          : 'bg-primary-50 text-primary-600 border-primary-200 hover:border-primary-400'
-                      }`}
-                    >
-                      ↳ {sub}
-                    </button>
-                  );
-                })}
-              </>
-            );
-          }
-
           return (
             <button key={b}
-              onClick={() => { setBereich(isParentActive && !selectedUnterpunkt ? '' : b); setExpandedBereich(''); }}
+              onClick={() => setBereich(isActive ? '' : b)}
               className={`text-xs px-3 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${
-                isParentActive && !selectedUnterpunkt
+                isActive
                   ? 'bg-primary-600 text-white border-primary-600'
                   : count > 0
                   ? 'bg-primary-50 text-primary-700 border-primary-300 hover:border-primary-500'
@@ -490,7 +681,7 @@ export default function BuildingPage() {
               }`}
             >
               {b}
-              {count > 0 && !(isParentActive && !selectedUnterpunkt) && (
+              {count > 0 && !isActive && (
                 <span className="text-[10px] font-semibold bg-primary-500 text-white rounded-full px-1.5 py-0 leading-4 min-w-[18px] text-center">
                   {count}
                 </span>
@@ -502,22 +693,28 @@ export default function BuildingPage() {
 
       {/* Bereich-Vorlagen-Panel */}
       {selectedBereich && (
-        <BereichPositionsPanel
-          projectId={projectId!}
-          phase={selectedPhase}
-          bereich={selectedBereich}
-          unterpunkt={selectedUnterpunkt || undefined}
-          onAdd={(template) => {
-            setEditBereichPosition(null);
-            setSelectedTemplate(template || null);
-            setShowBereichForm(true);
-          }}
-          onEdit={(pos) => {
-            setEditBereichPosition(pos);
-            setSelectedTemplate(null);
-            setShowBereichForm(true);
-          }}
-        />
+        SPECIAL_BEREICHE.includes(selectedBereich)
+          ? selectedBereich === 'Container & Entsorgung'
+            ? <ContainerPanel projectId={projectId!} />
+            : selectedBereich === 'Gerüst'
+            ? <GeruestPanel projectId={projectId!} />
+            : <KranPanel projectId={projectId!} />
+          : <BereichPositionsPanel
+              projectId={projectId!}
+              phase={selectedPhase}
+              bereich={selectedBereich}
+              unterpunkt={selectedUnterpunkt || undefined}
+              onAdd={(template) => {
+                setEditBereichPosition(null);
+                setSelectedTemplate(template || null);
+                setShowBereichForm(true);
+              }}
+              onEdit={(pos) => {
+                setEditBereichPosition(pos);
+                setSelectedTemplate(null);
+                setShowBereichForm(true);
+              }}
+            />
       )}
 
       {/* Etagen */}

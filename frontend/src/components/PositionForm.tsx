@@ -4,25 +4,21 @@ import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { useSearchParams } from 'react-router-dom';
 import { createPosition, updatePosition, getTemplates, createTemplate } from '../api/projects';
 import type { Floor, Room, Position, PositionTemplate, PhaseType, PositionUnit } from '../types';
+import { BEREICHE_ENTKERNUNG_RENOVIERUNG, BEREICHE_HIERARCHIE } from '../data/bereiche';
 
 const UNITS: PositionUnit[] = ['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psch', 't'];
 const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten', all: 'Alle Phasen',
 };
 
-export const BEREICHE_STATIC = ['Treppenhaus', 'Keller', 'Fenster', 'Türen', 'Fassade', 'Außenanlage'];
-export const BEREICHE_ENTKERNUNG_EXTRA = ['Pauschale (externe Arbeiten)'];
-export const AUSSENANLAGE_UNTERPUNKTE = ['Carport', 'Garage', 'Spielplatz'];
-export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Balkone', 'Betonsanierung'];
-export const BEREICH_UNTERPUNKTE: Record<string, string[]> = {
-  'Fenster': ['Fenster extern', 'Fenster intern'],
-  'Türen':   ['Türen extern', 'Türen intern'],
-};
+export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Balkone', 'Betonsanierung', 'Container & Entsorgung', 'Gerüst', 'Kran'];
+// Legacy-Exporte für Kompatibilität
+export const BEREICH_UNTERPUNKTE: Record<string, string[]> = {};
 
 export function getBereicheForPhase(phase: string, _projectFloors: Floor[] = []): string[] {
   return phase === 'specialConstruction'
     ? BEREICHE_SONDERARBEITEN
-    : [...BEREICHE_STATIC, ...BEREICHE_ENTKERNUNG_EXTRA];
+    : BEREICHE_ENTKERNUNG_RENOVIERUNG;
 }
 
 interface Props {
@@ -41,7 +37,7 @@ interface Props {
 }
 
 interface FormValues {
-  name: string; category: string; bereich: string; aussenanlageUnterpunkt: string; bereichUnterpunkt: string; description: string;
+  name: string; category: string; bereich: string; bereichUnterpunkt: string; description: string;
   unit: PositionUnit; quantity: number; estrichThickness: number;
   materialCostPerUnit: number; disposalCostPerUnit: number;
   laborHoursPerUnit: number; laborHourlyRate: number;
@@ -77,12 +73,18 @@ export default function PositionForm({
     ? +(2 * (roomDimensions.length + roomDimensions.width)).toFixed(2)
     : undefined;
 
+  // Parse existing bereichUnterpunkt into sub-levels for cascading dropdowns
+  const initUnterpunkt = editPosition?.bereichUnterpunkt || initialTemplate?.bereichUnterpunkt || urlUnterpunkt || '';
+  const initParts = initUnterpunkt ? initUnterpunkt.split(' > ') : [];
+  const [sub1, setSub1] = useState(initParts[0] || '');
+  const [sub2, setSub2] = useState(initParts[1] || '');
+  const [sub3, setSub3] = useState(initParts[2] || '');
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     defaultValues: editPosition
       ? {
           name: editPosition.name, category: editPosition.category,
           bereich: editPosition.bereich || '',
-          aussenanlageUnterpunkt: editPosition.aussenanlageUnterpunkt || '',
           bereichUnterpunkt: editPosition.bereichUnterpunkt || '',
           description: editPosition.description,
           unit: editPosition.unit, quantity: editPosition.quantity, estrichThickness: editPosition.estrichThickness,
@@ -93,7 +95,7 @@ export default function PositionForm({
       ? {
           name: initialTemplate.name, category: initialTemplate.category || '',
           bereich: initialTemplate.bereich || urlBereich,
-          aussenanlageUnterpunkt: '', bereichUnterpunkt: initialTemplate.bereichUnterpunkt || '', description: '',
+          bereichUnterpunkt: initialTemplate.bereichUnterpunkt || '', description: '',
           unit: initialTemplate.unit, quantity: 0, estrichThickness: 45,
           materialCostPerUnit: initialTemplate.materialCostPerUnit,
           disposalCostPerUnit: initialTemplate.disposalCostPerUnit,
@@ -103,7 +105,7 @@ export default function PositionForm({
       : {
           unit: 'm²', quantity: 0, laborHourlyRate: defaultHourlyRate, estrichThickness: 45,
           materialCostPerUnit: 0, disposalCostPerUnit: 0, laborHoursPerUnit: 0,
-          bereich: urlBereich, aussenanlageUnterpunkt: '', bereichUnterpunkt: urlUnterpunkt,
+          bereich: urlBereich, bereichUnterpunkt: '',
         },
   });
 
@@ -112,9 +114,26 @@ export default function PositionForm({
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
   const bereiche = getBereicheForPhase(phaseType, projectFloors);
-  const showUnterpunkt = watchedValues.bereich === 'Außenanlage';
-  const showBereichUnterpunkt = watchedValues.bereich ? watchedValues.bereich in BEREICH_UNTERPUNKTE : false;
-  const bereichUnterpunktOptionen = watchedValues.bereich ? (BEREICH_UNTERPUNKTE[watchedValues.bereich] ?? []) : [];
+
+  // Cascading dropdown options
+  const sub1Options = watchedValues.bereich ? (BEREICHE_HIERARCHIE[watchedValues.bereich] ?? []) : [];
+  const sub1Node = sub1Options.find(n => n.label === sub1);
+  const sub2Options = sub1Node?.children ?? [];
+  const sub2Node = sub2Options.find(n => n.label === sub2);
+  const sub3Options = sub2Node?.children ?? [];
+
+  const handleSub1Change = (val: string) => {
+    setSub1(val); setSub2(''); setSub3('');
+    setValue('bereichUnterpunkt', val);
+  };
+  const handleSub2Change = (val: string) => {
+    setSub2(val); setSub3('');
+    setValue('bereichUnterpunkt', [sub1, val].filter(Boolean).join(' > '));
+  };
+  const handleSub3Change = (val: string) => {
+    setSub3(val);
+    setValue('bereichUnterpunkt', [sub1, sub2, val].filter(Boolean).join(' > '));
+  };
 
   const { data: allTemplates = [] } = useQuery(['templates', 'all'], () => getTemplates());
 
@@ -152,8 +171,11 @@ export default function PositionForm({
     setNameInput(t.name);
     setValue('category', t.category);
     if (t.bereich) setValue('bereich', t.bereich);
-    if (t.aussenanlageUnterpunkt) setValue('aussenanlageUnterpunkt', t.aussenanlageUnterpunkt);
-    if (t.bereichUnterpunkt) setValue('bereichUnterpunkt', t.bereichUnterpunkt);
+    if (t.bereichUnterpunkt) {
+      setValue('bereichUnterpunkt', t.bereichUnterpunkt);
+      const parts = t.bereichUnterpunkt.split(' > ');
+      setSub1(parts[0] || ''); setSub2(parts[1] || ''); setSub3(parts[2] || '');
+    }
     setValue('unit', t.unit);
     setValue('materialCostPerUnit', t.materialCostPerUnit);
     setValue('disposalCostPerUnit', t.disposalCostPerUnit);
@@ -181,8 +203,7 @@ export default function PositionForm({
       name: watchedValues.name,
       category: watchedValues.category,
       bereich: watchedValues.bereich || undefined,
-      aussenanlageUnterpunkt: watchedValues.aussenanlageUnterpunkt || undefined,
-      bereichUnterpunkt: (watchedValues.bereich && watchedValues.bereich in BEREICH_UNTERPUNKTE) ? (watchedValues.bereichUnterpunkt || undefined) : undefined,
+      bereichUnterpunkt: watchedValues.bereichUnterpunkt || undefined,
       description: watchedValues.description || undefined,
       unit: watchedValues.unit,
       phaseType: savePhaseType as any,
@@ -215,8 +236,7 @@ export default function PositionForm({
       ...data, roomId: effectiveRoomId || undefined, phaseType,
       templateId: selectedTemplate || undefined,
       bereich: data.bereich || undefined,
-      aussenanlageUnterpunkt: data.bereich === 'Außenanlage' ? (data.aussenanlageUnterpunkt || undefined) : undefined,
-      bereichUnterpunkt: (data.bereich && data.bereich in BEREICH_UNTERPUNKTE) ? (data.bereichUnterpunkt || undefined) : undefined,
+      bereichUnterpunkt: data.bereichUnterpunkt || undefined,
     } as any);
   };
 
@@ -228,7 +248,7 @@ export default function PositionForm({
   }, {} as Record<string, PositionTemplate[]>);
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h3 className="font-semibold text-lg">{isEdit ? 'Position bearbeiten' : 'Neue Position'}</h3>
@@ -256,40 +276,52 @@ export default function PositionForm({
             </div>
           )}
 
-          {/* Bereich-Auswahl oben (prominent) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Bereich</label>
-              <select
-                {...register('bereich')}
-                className="input"
-                onChange={(e) => {
-                  setValue('bereich', e.target.value);
-                  setValue('bereichUnterpunkt', '');
-                }}
-              >
-                <option value="">– kein Bereich –</option>
-                {bereiche.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
+          {/* Bereich-Auswahl (kaskadierend) */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <label className="label">Bereich</label>
+                <select
+                  {...register('bereich')}
+                  className="input"
+                  onChange={(e) => {
+                    setValue('bereich', e.target.value);
+                    setValue('bereichUnterpunkt', '');
+                    setSub1(''); setSub2(''); setSub3('');
+                  }}
+                >
+                  <option value="">– kein Bereich –</option>
+                  {bereiche.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              {sub1Options.length > 0 && (
+                <div>
+                  <label className="label">Unterkategorie</label>
+                  <select value={sub1} onChange={(e) => handleSub1Change(e.target.value)} className="input">
+                    <option value="">– bitte wählen –</option>
+                    {sub1Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+                  </select>
+                </div>
+              )}
+              {sub1 && sub2Options.length > 0 && (
+                <div>
+                  <label className="label">Detail</label>
+                  <select value={sub2} onChange={(e) => handleSub2Change(e.target.value)} className="input">
+                    <option value="">– bitte wählen –</option>
+                    {sub2Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+                  </select>
+                </div>
+              )}
+              {sub2 && sub3Options.length > 0 && (
+                <div>
+                  <label className="label">Spezifikation</label>
+                  <select value={sub3} onChange={(e) => handleSub3Change(e.target.value)} className="input">
+                    <option value="">– bitte wählen –</option>
+                    {sub3Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
-            {showBereichUnterpunkt && (
-              <div>
-                <label className="label">{watchedValues.bereich} – Unterpunkt</label>
-                <select {...register('bereichUnterpunkt')} className="input">
-                  <option value="">– bitte wählen –</option>
-                  {bereichUnterpunktOptionen.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-            )}
-            {showUnterpunkt && (
-              <div>
-                <label className="label">Außenanlage – Unterpunkt</label>
-                <select {...register('aussenanlageUnterpunkt')} className="input">
-                  <option value="">– bitte wählen –</option>
-                  {AUSSENANLAGE_UNTERPUNKTE.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

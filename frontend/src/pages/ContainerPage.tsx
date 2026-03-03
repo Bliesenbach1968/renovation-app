@@ -115,7 +115,6 @@ export default function ContainerPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="table-cell text-left font-medium text-gray-600">Typ</th>
-                  <th className="table-cell text-left font-medium text-gray-600">Phase</th>
                   <th className="table-cell text-right font-medium text-gray-600">Größe</th>
                   <th className="table-cell text-right font-medium text-gray-600">Anzahl</th>
                   <th className="table-cell text-right font-medium text-gray-600">Preis/Stk</th>
@@ -127,9 +126,6 @@ export default function ContainerPage() {
                 {containers.map((c) => (
                   <tr key={c._id} className={`hover:bg-gray-50 group ${editItem?._id === c._id ? 'bg-primary-50' : ''}`}>
                     <td className="table-cell">{c.type}</td>
-                    <td className="table-cell text-gray-500">
-                      {c.phaseType === 'demolition' ? 'Entkernung' : c.phaseType === 'renovation' ? 'Renovierung' : c.phaseType}
-                    </td>
                     <td className="table-cell text-right">{c.sizeCubicMeters} m³</td>
                     <td className="table-cell text-right">{c.quantity}×</td>
                     <td className="table-cell text-right">{eur(c.pricePerContainer)}</td>
@@ -181,7 +177,7 @@ function ContainerForm({
     sizeCubicMeters:  initial?.sizeCubicMeters  ?? 10,
     quantity:         initial?.quantity         ?? 1,
     pricePerContainer: initial?.pricePerContainer ?? 350,
-    phaseType:        initial?.phaseType        ?? 'demolition',
+    phaseType:        'specialConstruction',
     notes:            initial?.notes            ?? '',
   });
 
@@ -210,13 +206,6 @@ function ContainerForm({
         <div>
           <label className="label">Preis pro Stück (€)</label>
           <input value={form.pricePerContainer} onChange={(e) => setForm(f => ({ ...f, pricePerContainer: +e.target.value }))} type="number" step="0.01" className="input" />
-        </div>
-        <div>
-          <label className="label">Phase</label>
-          <select value={form.phaseType} onChange={(e) => setForm(f => ({ ...f, phaseType: e.target.value }))} className="input">
-            <option value="demolition">Entkernung</option>
-            <option value="renovation">Renovierung</option>
-          </select>
         </div>
         <div>
           <label className="label">Notiz</label>

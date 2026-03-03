@@ -8,9 +8,6 @@ function eur(n: number) {
   return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 }
 
-const PHASE_NAMES: Record<string, string> = {
-  demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
-};
 
 const GERUEST_TYPES = ['Fassadengerüst', 'Innengerüst', 'Hängegerüst', 'Schutzgerüst', 'Traggerüst', 'Raumgerüst', 'Arbeitsgerüst', 'Sonstiges'];
 
@@ -103,7 +100,6 @@ export default function GeruestPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="table-cell text-left font-medium text-gray-600">Typ</th>
-                  <th className="table-cell text-left font-medium text-gray-600">Phase</th>
                   <th className="table-cell text-right font-medium text-gray-600">Fläche (m²)</th>
                   <th className="table-cell text-right font-medium text-gray-600">Wochen</th>
                   <th className="table-cell text-right font-medium text-gray-600">Preis/m²/Wo.</th>
@@ -116,7 +112,6 @@ export default function GeruestPage() {
                 {gerueste.map((g) => (
                   <tr key={g._id} className={`hover:bg-gray-50 group ${editItem?._id === g._id ? 'bg-primary-50' : ''}`}>
                     <td className="table-cell">{g.type}</td>
-                    <td className="table-cell text-gray-500">{PHASE_NAMES[g.phaseType] ?? g.phaseType}</td>
                     <td className="table-cell text-right">{g.areaSqm}</td>
                     <td className="table-cell text-right">{g.rentalWeeks}</td>
                     <td className="table-cell text-right">{eur(g.pricePerSqmPerWeek)}</td>
@@ -170,7 +165,7 @@ function GeruestForm({
     rentalWeeks:             initial?.rentalWeeks             ?? 4,
     pricePerSqmPerWeek:      initial?.pricePerSqmPerWeek      ?? 2.5,
     assemblyDisassemblyCost: initial?.assemblyDisassemblyCost ?? 500,
-    phaseType:               initial?.phaseType               ?? 'demolition',
+    phaseType:               'specialConstruction',
     notes:                   initial?.notes                   ?? '',
   });
 
@@ -186,14 +181,6 @@ function GeruestForm({
           <label className="label">Typ</label>
           <select value={form.type} onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))} className="input">
             {GERUEST_TYPES.map(t => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">Phase</label>
-          <select value={form.phaseType} onChange={(e) => setForm(f => ({ ...f, phaseType: e.target.value }))} className="input">
-            <option value="demolition">Entkernung</option>
-            <option value="renovation">Renovierung</option>
-            <option value="specialConstruction">Sonderarbeiten</option>
           </select>
         </div>
         <div>
