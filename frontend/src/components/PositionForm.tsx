@@ -255,77 +255,65 @@ export default function PositionForm({
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-4 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
 
-          {/* Raum-Auswahl (nur wenn von BuildingPage geöffnet) */}
-          {!roomId && rooms && rooms.length > 0 && (
-            <div>
-              <label className="label">Raum (optional)</label>
-              <select
-                value={internalRoomId}
-                onChange={(e) => setInternalRoomId(e.target.value)}
-                className="input"
-              >
-                <option value="">– Raum auswählen –</option>
-                {rooms.map(r => (
-                  <option key={r._id} value={r._id}>
-                    {r.name}{r.dimensions?.area ? ` (${r.dimensions.area} m²)` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Bereich-Auswahl (kaskadierend) */}
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 gap-2">
-              <div>
-                <label className="label">Bereich</label>
-                <select
-                  {...register('bereich')}
-                  className="input"
-                  onChange={(e) => {
-                    setValue('bereich', e.target.value);
-                    setValue('bereichUnterpunkt', '');
-                    setSub1(''); setSub2(''); setSub3('');
-                  }}
-                >
-                  <option value="">– kein Bereich –</option>
-                  {bereiche.map((b) => <option key={b} value={b}>{b}</option>)}
+            {/* Raum */}
+            {!roomId && rooms && rooms.length > 0 && (
+              <div className="col-span-2 md:col-span-3">
+                <label className="label">Raum (optional)</label>
+                <select value={internalRoomId} onChange={(e) => setInternalRoomId(e.target.value)} className="input">
+                  <option value="">– Raum auswählen –</option>
+                  {rooms.map(r => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}{r.dimensions?.area ? ` (${r.dimensions.area} m²)` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
-              {sub1Options.length > 0 && (
-                <div>
-                  <label className="label">Unterkategorie</label>
-                  <select value={sub1} onChange={(e) => handleSub1Change(e.target.value)} className="input">
-                    <option value="">– bitte wählen –</option>
-                    {sub1Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
-                  </select>
-                </div>
-              )}
-              {sub1 && sub2Options.length > 0 && (
-                <div>
-                  <label className="label">Detail</label>
-                  <select value={sub2} onChange={(e) => handleSub2Change(e.target.value)} className="input">
-                    <option value="">– bitte wählen –</option>
-                    {sub2Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
-                  </select>
-                </div>
-              )}
-              {sub2 && sub3Options.length > 0 && (
-                <div>
-                  <label className="label">Spezifikation</label>
-                  <select value={sub3} onChange={(e) => handleSub3Change(e.target.value)} className="input">
-                    <option value="">– bitte wählen –</option>
-                    {sub3Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
+            )}
 
-          <div className="grid grid-cols-2 gap-3">
-            {/* Bezeichnung mit Autocomplete */}
+            {/* Bereich – kaskadierend im Grid */}
+            <div>
+              <label className="label">Bereich</label>
+              <select
+                {...register('bereich')}
+                className="input"
+                onChange={(e) => { setValue('bereich', e.target.value); setValue('bereichUnterpunkt', ''); setSub1(''); setSub2(''); setSub3(''); }}
+              >
+                <option value="">– kein Bereich –</option>
+                {bereiche.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            {sub1Options.length > 0 && (
+              <div>
+                <label className="label">Unterkategorie</label>
+                <select value={sub1} onChange={(e) => handleSub1Change(e.target.value)} className="input">
+                  <option value="">– bitte wählen –</option>
+                  {sub1Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+                </select>
+              </div>
+            )}
+            {sub1 && sub2Options.length > 0 && (
+              <div>
+                <label className="label">Detail</label>
+                <select value={sub2} onChange={(e) => handleSub2Change(e.target.value)} className="input">
+                  <option value="">– bitte wählen –</option>
+                  {sub2Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+                </select>
+              </div>
+            )}
+            {sub2 && sub3Options.length > 0 && (
+              <div>
+                <label className="label">Spezifikation</label>
+                <select value={sub3} onChange={(e) => handleSub3Change(e.target.value)} className="input">
+                  <option value="">– bitte wählen –</option>
+                  {sub3Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Bezeichnung – col-span-2 mit Autocomplete */}
             <div className="col-span-2 relative" ref={suggestRef}>
               <label className="label">Bezeichnung *</label>
               <input
@@ -338,7 +326,6 @@ export default function PositionForm({
                 autoComplete="off"
               />
               {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-
               {showSuggestions && (
                 <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
                   <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0">
@@ -386,6 +373,7 @@ export default function PositionForm({
               )}
             </div>
 
+            {/* Kategorie */}
             <div>
               <label className="label">Kategorie</label>
               <input {...register('category')} className="input" placeholder="z.B. Boden, Wand, Installation" />
@@ -405,15 +393,7 @@ export default function PositionForm({
               )}
             </div>
 
-            <div>
-              <label className="label">Einheit</label>
-              <select {...register('unit')} className="input">
-                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
+            {/* Menge */}
             <div>
               <label className="label">Menge *</label>
               <input {...register('quantity', { required: true, valueAsNumber: true, min: 0 })} type="number" step="0.01" className="input" />
@@ -425,46 +405,50 @@ export default function PositionForm({
                 </div>
               )}
             </div>
+
+            {/* Einheit */}
             <div>
               <label className="label">Einheit</label>
               <select {...register('unit')} className="input">
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
+
+            {/* Estrich-Dicke (bedingt) */}
             {watchedValues.name?.toLowerCase().includes('estrich') && (
               <div>
                 <label className="label">Dicke (mm)</label>
                 <input {...register('estrichThickness', { valueAsNumber: true })} type="number" className="input" />
               </div>
             )}
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
+            {/* Kosten */}
             <div>
-              <label className="label">Materialkosten / Einheit (€)</label>
+              <label className="label">Materialkosten/Einheit (€)</label>
               <input {...register('materialCostPerUnit', { valueAsNumber: true, min: 0 })} type="number" step="0.01" className="input" />
             </div>
             <div>
-              <label className="label">Entsorgungskosten / Einheit (€)</label>
+              <label className="label">Entsorgung/Einheit (€)</label>
               <input {...register('disposalCostPerUnit', { valueAsNumber: true, min: 0 })} type="number" step="0.01" className="input" />
             </div>
             <div>
-              <label className="label">Arbeitsstunden / Einheit</label>
+              <label className="label">Arbeitsstunden/Einheit</label>
               <input {...register('laborHoursPerUnit', { valueAsNumber: true, min: 0 })} type="number" step="0.01" className="input" />
             </div>
             <div>
               <label className="label">Stundensatz (€/Std)</label>
               <input {...register('laborHourlyRate', { valueAsNumber: true, min: 0 })} type="number" step="0.5" className="input" />
             </div>
+
+            {/* Beschreibung */}
+            <div className="col-span-2 md:col-span-3">
+              <label className="label">Beschreibung / Notiz</label>
+              <textarea {...register('description')} className="input" rows={2} />
+            </div>
           </div>
 
-          <div>
-            <label className="label">Beschreibung / Notiz</label>
-            <textarea {...register('description')} className="input" rows={2} />
-          </div>
-
-          {/* Live-Vorschau */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+          {/* Kostenvorschau */}
+          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-slate-800 mb-2">Kostenvorschau</h4>
             <div className="grid grid-cols-4 gap-2 text-sm">
               <div><p className="text-slate-500 text-xs">Materialkosten</p><p className="font-semibold">{preview.mat.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
@@ -476,7 +460,7 @@ export default function PositionForm({
 
           {/* Als Vorlage speichern */}
           {!isEdit && (
-            <div className="border border-dashed border-gray-300 rounded-lg p-3">
+            <div className="mt-3 border border-dashed border-gray-300 rounded-lg p-3">
               {!showSaveTemplate ? (
                 <button type="button" onClick={() => setShowSaveTemplate(true)}
                   className="text-sm text-gray-500 hover:text-primary-600 w-full text-left">
@@ -513,13 +497,13 @@ export default function PositionForm({
           )}
 
           {saveSuccess && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-4 py-2 text-sm">
+            <div className="mt-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-4 py-2 text-sm">
               Vorlage wurde gespeichert.
             </div>
           )}
 
           {mutation.error != null && (
-            <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-2 text-sm">
+            <div className="mt-3 bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-2 text-sm">
               {(mutation.error as any).response?.data?.message || 'Fehler beim Speichern'}
             </div>
           )}

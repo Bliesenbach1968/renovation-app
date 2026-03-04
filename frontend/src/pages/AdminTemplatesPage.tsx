@@ -63,23 +63,25 @@ function TemplateForm({
     setValue('bereichUnterpunkt', [sub1, sub2, val].filter(Boolean).join(' > '));
   };
 
+  const watchedValues = watch();
+  const matPerUnit = +(watchedValues.materialCostPerUnit ?? 0);
+  const disPerUnit = +(watchedValues.disposalCostPerUnit ?? 0);
+  const labPerUnit = +((watchedValues.laborHoursPerUnit ?? 0) * (watchedValues.laborHourlyRate ?? 0)).toFixed(2);
+  const totalPerUnit = +(matPerUnit + disPerUnit + labPerUnit).toFixed(2);
+
   return (
-    <div className="border border-primary-200 bg-primary-50/30 rounded-xl p-4 mt-2 space-y-3">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <div className="col-span-2">
-          <label className="label">Bezeichnung *</label>
-          <input {...register('name', { required: true })} className="input" />
-        </div>
-        <div>
-          <label className="label">Kategorie</label>
-          <input {...register('category')} className="input" placeholder="z.B. Boden, Wand" />
-        </div>
-        <div>
-          <label className="label">Phase</label>
-          <select {...register('phaseType')} className="input">
-            {Object.entries(PHASE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
+    <div className="border border-primary-200 bg-primary-50/30 rounded-xl p-5 mt-2 space-y-4">
+
+      {/* Phase */}
+      <div>
+        <label className="label">Phase</label>
+        <select {...register('phaseType')} className="input">
+          {Object.entries(PHASE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+
+      {/* Bereich – kaskadierend */}
+      <div className="space-y-2">
         <div>
           <label className="label">Bereich</label>
           <select
@@ -118,33 +120,71 @@ function TemplateForm({
             </select>
           </div>
         )}
+      </div>
+
+      {/* Bezeichnung */}
+      <div>
+        <label className="label">Bezeichnung *</label>
+        <input {...register('name', { required: true })} className="input" placeholder="Name der Vorlage" />
+      </div>
+
+      {/* Kategorie + Einheit */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">Kategorie</label>
+          <input {...register('category')} className="input" placeholder="z.B. Boden, Wand" />
+        </div>
         <div>
           <label className="label">Einheit</label>
           <select {...register('unit')} className="input">
             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
         </div>
+      </div>
+
+      {/* Kosten */}
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="label">Materialkosten/Einheit (€)</label>
+          <label className="label">Materialkosten / Einheit (€)</label>
           <input {...register('materialCostPerUnit', { valueAsNumber: true })} type="number" step="0.01" className="input" />
         </div>
         <div>
-          <label className="label">Entsorgung/Einheit (€)</label>
+          <label className="label">Entsorgungskosten / Einheit (€)</label>
           <input {...register('disposalCostPerUnit', { valueAsNumber: true })} type="number" step="0.01" className="input" />
         </div>
         <div>
-          <label className="label">Arbeitsstunden/Einheit</label>
+          <label className="label">Arbeitsstunden / Einheit</label>
           <input {...register('laborHoursPerUnit', { valueAsNumber: true })} type="number" step="0.01" className="input" />
         </div>
         <div>
           <label className="label">Stundensatz (€/Std)</label>
           <input {...register('laborHourlyRate', { valueAsNumber: true })} type="number" step="0.5" className="input" />
         </div>
-        <div className="col-span-2 md:col-span-3">
-          <label className="label">Beschreibung</label>
-          <textarea {...register('description')} className="input" rows={2} />
+      </div>
+
+      {/* Beschreibung */}
+      <div>
+        <label className="label">Beschreibung / Notiz</label>
+        <textarea {...register('description')} className="input" rows={2} />
+      </div>
+
+      {/* Kostenvorschau pro Einheit */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-slate-800 mb-2">Kostenvorschau</h4>
+        <div className="grid grid-cols-4 gap-2 text-sm">
+          <div><p className="text-slate-500 text-xs">Materialkosten</p><p className="font-semibold">{matPerUnit.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+          <div><p className="text-slate-500 text-xs">Entsorgung</p><p className="font-semibold">{disPerUnit.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+          <div><p className="text-slate-500 text-xs">Arbeitskosten</p><p className="font-semibold">{labPerUnit.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
+          <div className="bg-slate-200 rounded p-2"><p className="text-slate-600 text-xs">Gesamt</p><p className="font-bold text-slate-800">{totalPerUnit.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</p></div>
         </div>
       </div>
+
+      {isSystem && (
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+          Systemvorlagen können nicht direkt bearbeitet werden – die Änderungen werden als neue eigene Vorlage gespeichert.
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2 pt-1">
         <button type="button" onClick={handleSubmit(onSaveNew)} className="btn-primary btn-sm">
           {isSystem ? 'Als neue Vorlage speichern' : 'Als Kopie speichern'}
@@ -156,11 +196,6 @@ function TemplateForm({
         )}
         <button type="button" onClick={onCancel} className="btn-secondary btn-sm">Abbrechen</button>
       </div>
-      {isSystem && (
-        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-          Systemvorlagen können nicht direkt bearbeitet werden – die Änderungen werden als neue eigene Vorlage gespeichert.
-        </p>
-      )}
     </div>
   );
 }
