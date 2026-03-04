@@ -21,6 +21,7 @@ const containerRoutes = require('./routes/containers');
 const geruestRoutes   = require('./routes/geruest');
 const kranRoutes      = require('./routes/kran');
 const templateRoutes  = require('./routes/templates');
+const financeRoutes   = require('./routes/finance');
 
 // Datenbankverbindung
 connectDB();
@@ -69,6 +70,7 @@ app.use(`${API}/projects`,   containerRoutes);
 app.use(`${API}/projects`,   geruestRoutes);
 app.use(`${API}/projects`,   kranRoutes);
 app.use(`${API}/templates`,  templateRoutes);
+app.use(`${API}/projects`,   financeRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ message: `Route nicht gefunden: ${req.originalUrl}` }));

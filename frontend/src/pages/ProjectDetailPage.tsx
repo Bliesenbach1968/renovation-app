@@ -212,7 +212,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Schnellnavigation */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           {
             label: 'Gebäude & Räume',
@@ -259,6 +259,22 @@ export default function ProjectDetailPage() {
                 <rect x="10" y="33" width="20" height="7"  fill="white" rx="1"/>
                 <rect x="32" y="33" width="18" height="7"  fill="white" rx="1"/>
                 <rect x="10" y="45" width="38" height="7"  fill="white" rx="1"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Finanzierung',
+            to: `/projects/${id}/finance`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="8" width="56" height="48" rx="4"/>
+                <rect x="4" y="8" width="56" height="12" rx="4" fill="white" opacity="0.2"/>
+                <rect x="10" y="28" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="10" y="38" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="28" y="28" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="28" y="38" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="46" y="28" width="10" height="16" rx="2" fill="white"/>
+                <text x="32" y="18" fontSize="10" fill="white" textAnchor="middle" fontWeight="bold">€</text>
               </svg>
             ),
           },
