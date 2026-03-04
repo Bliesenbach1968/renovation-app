@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { getProject, getProjectSummary } from '../api/projects';
 import type { ProjectSummary, Project } from '../types';
 
@@ -159,6 +160,84 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
   doc.save(`Kostenkalkulation_${project.projectNumber}_${project.name.replace(/\s+/g, '_')}.pdf`);
 }
 
+// ─── Excel-Download ───────────────────────────────────────────────────────────
+
+function downloadExcel(project: Project, summary: ProjectSummary) {
+  const now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const wb = XLSX.utils.book_new();
+
+  // ── Übersichtsblatt ────────────────────────────────────────────────────────
+  const overviewRows: (string | number)[][] = [
+    ['Kostenkalkulation'],
+    [project.name],
+    [project.projectNumber],
+    [`${project.address.street}, ${project.address.zipCode} ${project.address.city}`],
+    [`Erstellt am ${now}`],
+    [],
+    ['Phase', 'Materialkosten (€)', 'Entsorgungskosten (€)', 'Arbeitskosten (€)', 'Phasensumme (€)', 'Arbeitsstunden', 'Positionen'],
+  ];
+
+  for (const phase of PHASE_ORDER) {
+    const d = summary.phases[phase];
+    if (!d) continue;
+    overviewRows.push([
+      PHASE_NAMES[phase],
+      d.materialCost,
+      d.disposalCost,
+      d.laborCost,
+      d.subtotal,
+      parseFloat(d.totalHours.toFixed(1)),
+      d.positionCount,
+    ]);
+  }
+
+  const t = summary.totals;
+  overviewRows.push([]);
+  overviewRows.push([
+    'GESAMTSUMME',
+    t.materialCost,
+    t.disposalCost,
+    t.laborCost,
+    t.grandTotal,
+    parseFloat(t.totalHours.toFixed(0)),
+    '',
+  ]);
+
+  const wsOverview = XLSX.utils.aoa_to_sheet(overviewRows);
+
+  // Spaltenbreiten
+  wsOverview['!cols'] = [
+    { wch: 22 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 12 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, wsOverview, 'Übersicht');
+
+  // ── Je Phase ein eigenes Blatt ────────────────────────────────────────────
+  for (const phase of PHASE_ORDER) {
+    const d = summary.phases[phase];
+    if (!d) continue;
+
+    const rows: (string | number)[][] = [
+      [PHASE_NAMES[phase]],
+      [],
+      ['Kostenart', 'Betrag (€)'],
+      ['Materialkosten', d.materialCost],
+      ['Entsorgungskosten', d.disposalCost],
+      ['Arbeitskosten', d.laborCost],
+      [],
+      ['Phasensumme', d.subtotal],
+      ['Arbeitsstunden', parseFloat(d.totalHours.toFixed(1))],
+      ['Positionen', d.positionCount],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 24 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, ws, PHASE_NAMES[phase]);
+  }
+
+  XLSX.writeFile(wb, `Kostenkalkulation_${project.projectNumber}_${project.name.replace(/\s+/g, '_')}.xlsx`);
+}
+
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
 export default function SummaryPage() {
@@ -177,43 +256,26 @@ export default function SummaryPage() {
         <Link to={`/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">← Projekt</Link>
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kostenkalkulation</h1>
         <span className="text-gray-400 text-sm hidden sm:inline">{project?.name}</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => project && summary && downloadExcel(project, summary)}
+            disabled={!summary || !project}
+            className="btn btn-sm btn-success"
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Excel
+          </button>
           <button
             onClick={() => project && summary && downloadPDF(project, summary)}
             disabled={!summary || !project}
-            className="inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              background: 'linear-gradient(180deg, #F03A2E 0%, #D42B20 100%)',
-              color: '#fff',
-              boxShadow: '0 1px 3px rgba(212,43,32,0.40), 0 1px 2px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.14)',
-              padding: '5px 10px 5px 6px',
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: '-0.01em',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={e => !e.currentTarget.disabled && (e.currentTarget.style.background = 'linear-gradient(180deg, #E83529 0%, #C42419 100%)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(180deg, #F03A2E 0%, #D42B20 100%)')}
+            className="btn btn-sm btn-danger"
           >
-            {/* Klassisches PDF-Icon */}
-            <span
-              className="flex items-center justify-center shrink-0"
-              style={{ width: 20, height: 20, background: 'rgba(0,0,0,0.20)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.18)' }}
-            >
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 2h8l4 4v16a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="rgba(255,255,255,0.95)" />
-                <path d="M14 2l4 4h-3a1 1 0 01-1-1V2z" fill="rgba(255,255,255,0.60)" />
-                <rect x="3" y="11" width="14" height="7" rx="1.5" fill="#D42B20" />
-                <text x="5.5" y="17" fontSize="5" fontWeight="bold" fill="white" fontFamily="Helvetica, Arial, sans-serif">PDF</text>
-              </svg>
-            </span>
-            PDF herunterladen
-            <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" style={{ opacity: 0.8 }}>
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
+            PDF
           </button>
         </div>
       </div>
