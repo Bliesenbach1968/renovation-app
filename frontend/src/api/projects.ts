@@ -107,6 +107,10 @@ export const updatePosition = async (projectId: string, id: string, body: Partia
 };
 export const deletePosition = async (projectId: string, id: string) =>
   client.delete(`/projects/${projectId}/positions/${id}`);
+export const bulkCreatePositions = async (projectId: string, positions: object[]) => {
+  const { data } = await client.post(`/projects/${projectId}/positions/bulk`, { positions });
+  return data as { count: number; data: Position[] };
+};
 
 // === Container ===
 export const getContainers = async (projectId: string) => {

@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -291,6 +291,7 @@ function FinanceKpiBar({ fin, projectId }: { fin: FinanceSummary; projectId: str
 
 export default function SummaryPage() {
   const { id: projectId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: summary, isLoading } = useQuery(['summary', projectId], () => getProjectSummary(projectId!), { refetchInterval: 10_000 });
@@ -311,6 +312,28 @@ export default function SummaryPage() {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kostenkalkulation</h1>
         <span className="text-gray-400 text-sm hidden sm:inline">{project?.name}</span>
         <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => navigate(`/projects/${projectId}/gaeb`)}
+            className="btn btn-sm btn-secondary"
+            title="GAEB Leistungsverzeichnis exportieren / importieren"
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            GAEB
+          </button>
+          <button
+            onClick={() => navigate(`/projects/${projectId}/datev`)}
+            className="btn btn-sm btn-secondary"
+            title="DATEV Buchungsstapel exportieren"
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            DATEV
+          </button>
           <button
             onClick={() => project && summary && downloadExcel(project, summary)}
             disabled={!summary || !project}

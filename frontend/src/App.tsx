@@ -18,6 +18,8 @@ import EditProjectPage from './pages/EditProjectPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import FinancePage from './pages/FinancePage';
+import DatevExportPage from './pages/DatevExportPage';
+import GaebPage from './pages/GaebPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -49,6 +51,8 @@ function AppRoutes() {
         <Route path="/projects/:id/geruest"         element={<GeruestPage />} />
         <Route path="/projects/:id/kran"            element={<KranPage />} />
         <Route path="/projects/:id/finance"         element={<FinancePage />} />
+        <Route path="/projects/:id/datev"           element={<DatevExportPage />} />
+        <Route path="/projects/:id/gaeb"           element={<GaebPage />} />
         <Route path="/admin/users"                  element={<AdminUsersPage />} />
         <Route path="/admin/templates"              element={<AdminTemplatesPage />} />
       </Route>
