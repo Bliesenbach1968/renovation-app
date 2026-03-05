@@ -17,6 +17,7 @@ const positionTemplateSchema = new mongoose.Schema(
       enum: ['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psch', 't'],
       required: true,
     },
+    estrichThickness:     { type: Number, min: 0, default: null }, // mm
     materialCostPerUnit:  { type: Number, default: 0, min: 0 },
     disposalCostPerUnit:  { type: Number, default: 0, min: 0 },
     laborHoursPerUnit:    { type: Number, default: 0, min: 0 },

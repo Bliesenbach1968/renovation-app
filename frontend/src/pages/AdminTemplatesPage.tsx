@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useForm } from 'react-hook-form';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplateApi } from '../api/projects';
@@ -12,6 +12,20 @@ const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten', all: 'Alle Phasen',
 };
 
+const THICKNESS_KEYWORDS = [
+  'estrich', 'dämmung', 'dämmstoff', 'wärmedämmung', 'trittschalldämmung',
+  'putz', 'glattstrich', 'beton', 'abdichtung', 'bodenplatte', 'bodenaufbau',
+  'spachtel', 'ausgleichsmasse', 'wandaufbau', 'deckenaufbau', 'unterboden',
+];
+function hasThicknessField(name: string) {
+  const lower = (name || '').toLowerCase();
+  return THICKNESS_KEYWORDS.some(k => lower.includes(k));
+}
+function nameHasEmbeddedThickness(name: string) {
+  const stripped = (name || '').replace(/\s*\(\d+\s*mm\)$/i, '');
+  return /\d+\s*mm/i.test(stripped);
+}
+
 function getBereicheForPhaseAdmin(phase: string): string[] {
   if (phase === 'specialConstruction') return BEREICHE_SONDERARBEITEN;
   return BEREICHE_ENTKERNUNG_RENOVIERUNG;
@@ -20,6 +34,7 @@ function getBereicheForPhaseAdmin(phase: string): string[] {
 interface FormValues {
   name: string; category: string; phaseType: string; unit: PositionUnit;
   bereich: string; bereichUnterpunkt: string;
+  estrichThickness: number | null;
   materialCostPerUnit: number; disposalCostPerUnit: number;
   laborHoursPerUnit: number; laborHourlyRate: number; description: string;
 }
@@ -33,7 +48,9 @@ function TemplateForm({
   onUpdate?: (data: FormValues) => void;
   onCancel: () => void;
 }) {
-  const { register, handleSubmit, watch, setValue } = useForm<FormValues>({ defaultValues: initial as FormValues });
+  const { register, handleSubmit, watch, setValue } = useForm<FormValues>({
+    defaultValues: { estrichThickness: null, ...initial } as FormValues,
+  });
   const watchedPhase = watch('phaseType');
   const watchedBereich = watch('bereich');
   const bereiche = getBereicheForPhaseAdmin(watchedPhase);
@@ -64,6 +81,28 @@ function TemplateForm({
   };
 
   const watchedValues = watch();
+  const watchedThickness = watch('estrichThickness');
+
+  // Wenn Dicke-Feld eingeblendet wird und noch leer → Standardwert 60 setzen
+  const watchedName = watch('name');
+  useEffect(() => {
+    if (hasThicknessField(watchedName) && !nameHasEmbeddedThickness(watchedName) && !watchedValues.estrichThickness) {
+      setValue('estrichThickness', 60);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedName]);
+
+  // Wenn Dicke geändert wird → Name live aktualisieren (z.B. "Estrich entfernen (45 mm)")
+  useEffect(() => {
+    const currentName = watchedValues.name || '';
+    if (!hasThicknessField(currentName)) return;
+    if (nameHasEmbeddedThickness(currentName)) return;
+    const baseName = currentName.replace(/\s*\(\d+\s*mm\)$/i, '').trim();
+    const newName = watchedThickness ? `${baseName} (${watchedThickness} mm)` : baseName;
+    if (newName !== currentName) setValue('name', newName);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedThickness]);
+
   const matPerUnit = +(watchedValues.materialCostPerUnit ?? 0);
   const disPerUnit = +(watchedValues.disposalCostPerUnit ?? 0);
   const labPerUnit = +((watchedValues.laborHoursPerUnit ?? 0) * (watchedValues.laborHourlyRate ?? 0)).toFixed(2);
@@ -127,6 +166,19 @@ function TemplateForm({
         <label className="label">Bezeichnung *</label>
         <input {...register('name', { required: true })} className="input" placeholder="Name der Vorlage" />
       </div>
+
+      {/* Dicke (bedingt – für Estrich, Dämmung, Putz, Beton usw.) */}
+      {hasThicknessField(watchedValues.name) && (
+        <div>
+          <label className="label">Dicke (mm)</label>
+          <input
+            {...register('estrichThickness', { valueAsNumber: true, setValueAs: v => v === '' ? null : +v })}
+            type="number"
+            className="input"
+            placeholder="z.B. 45"
+          />
+        </div>
+      )}
 
       {/* Kategorie + Einheit */}
       <div className="grid grid-cols-2 gap-3">
@@ -244,6 +296,7 @@ export default function AdminTemplatesPage() {
     name: t.name, category: t.category, phaseType: t.phaseType,
     unit: t.unit, bereich: t.bereich || '',
     bereichUnterpunkt: t.bereichUnterpunkt || '',
+    estrichThickness: t.estrichThickness ?? null,
     materialCostPerUnit: t.materialCostPerUnit,
     disposalCostPerUnit: t.disposalCostPerUnit, laborHoursPerUnit: t.laborHoursPerUnit,
     laborHourlyRate: t.laborHourlyRate, description: t.description || '',
@@ -277,13 +330,14 @@ export default function AdminTemplatesPage() {
         <div className="card mb-6">
           <h2 className="font-semibold mb-4">Neue Vorlage anlegen</h2>
           <TemplateForm
-            initial={{ phaseType: 'demolition', unit: 'm²', bereich: '', bereichUnterpunkt: '', materialCostPerUnit: 0, disposalCostPerUnit: 0, laborHoursPerUnit: 0, laborHourlyRate: 45 }}
+            initial={{ phaseType: 'demolition', unit: 'm²', bereich: '', bereichUnterpunkt: '', estrichThickness: null, materialCostPerUnit: 0, disposalCostPerUnit: 0, laborHoursPerUnit: 0, laborHourlyRate: 45 }}
             isSystem={false}
             onSaveNew={(data) => createMutation.mutate({
               ...data,
               phaseType: data.phaseType as PhaseType | 'all',
               bereich: data.bereich || undefined,
               bereichUnterpunkt: data.bereichUnterpunkt || undefined,
+              estrichThickness: data.estrichThickness || undefined,
               isSystemDefault: false,
             })}
             onCancel={() => setShowNewForm(false)}
@@ -318,6 +372,7 @@ export default function AdminTemplatesPage() {
                         </div>
                         <p className="text-xs text-gray-400">
                           {PHASE_LABELS[t.phaseType]} · {t.unit}
+                          {t.estrichThickness ? ` · Dicke: ${t.estrichThickness} mm` : ''}
                           {t.materialCostPerUnit > 0 ? ` · Material: ${t.materialCostPerUnit}€` : ''}
                           {t.disposalCostPerUnit > 0 ? ` · Entsorgung: ${t.disposalCostPerUnit}€` : ''}
                           {t.laborHoursPerUnit > 0 ? ` · ${t.laborHoursPerUnit}h/Einheit · ${t.laborHourlyRate}€/h` : ''}
@@ -348,6 +403,7 @@ export default function AdminTemplatesPage() {
                           phaseType: data.phaseType as PhaseType | 'all',
                           bereich: data.bereich || undefined,
                           bereichUnterpunkt: data.bereichUnterpunkt || undefined,
+                          estrichThickness: data.estrichThickness || undefined,
                           isSystemDefault: false,
                         })}
                         onUpdate={!t.isSystemDefault ? (data) => updateMutation.mutate({
@@ -357,6 +413,7 @@ export default function AdminTemplatesPage() {
                             phaseType: data.phaseType as PhaseType | 'all',
                             bereich: data.bereich || undefined,
                             bereichUnterpunkt: data.bereichUnterpunkt || undefined,
+                            estrichThickness: data.estrichThickness || undefined,
                           },
                         }) : undefined}
                         onCancel={() => setEditingId(null)}

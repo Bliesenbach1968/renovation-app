@@ -32,6 +32,7 @@ export const BEREICHE_HIERARCHIE: Record<string, BereichNode[]> = {
             { label: 'db) Rigipsplatten' },
           ],
         },
+        { label: 'e) Fliesen' },
       ],
     },
     {

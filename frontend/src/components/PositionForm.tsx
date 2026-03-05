@@ -7,6 +7,22 @@ import type { Floor, Room, Position, PositionTemplate, PhaseType, PositionUnit }
 import { BEREICHE_ENTKERNUNG_RENOVIERUNG, BEREICHE_HIERARCHIE } from '../data/bereiche';
 
 const UNITS: PositionUnit[] = ['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psch', 't'];
+
+// Positionsnamen, bei denen eine Dickenangabe (mm) sinnvoll ist
+const THICKNESS_KEYWORDS = [
+  'estrich', 'dämmung', 'dämmstoff', 'wärmedämmung', 'trittschalldämmung',
+  'putz', 'glattstrich', 'beton', 'abdichtung', 'bodenplatte', 'bodenaufbau',
+  'spachtel', 'ausgleichsmasse', 'wandaufbau', 'deckenaufbau', 'unterboden',
+];
+function hasThicknessField(name: string) {
+  const lower = (name || '').toLowerCase();
+  return THICKNESS_KEYWORDS.some(k => lower.includes(k));
+}
+// Prüft ob der Name bereits eine eingebettete mm-Angabe enthält (nicht am Ende – z.B. "Standard 60mm")
+function nameHasEmbeddedThickness(name: string) {
+  const stripped = (name || '').replace(/\s*\(\d+\s*mm\)$/i, '');
+  return /\d+\s*mm/i.test(stripped);
+}
 const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten', all: 'Alle Phasen',
 };
@@ -135,6 +151,32 @@ export default function PositionForm({
     setValue('bereichUnterpunkt', [sub1, sub2, val].filter(Boolean).join(' > '));
   };
 
+  // Wenn Dicke-Feld eingeblendet wird und noch leer → Standardwert 60 setzen
+  // (nur wenn der Name keine eingebettete mm-Angabe hat)
+  const watchedName = watch('name');
+  useEffect(() => {
+    if (hasThicknessField(watchedName) && !nameHasEmbeddedThickness(watchedName) && !watchedValues.estrichThickness) {
+      setValue('estrichThickness', 60);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedName]);
+
+  // Wenn Dicke geändert wird → Name live aktualisieren (z.B. "Estrich entfernen (45 mm)")
+  // (nicht wenn der Name bereits eine eingebettete mm-Angabe enthält)
+  const watchedThickness = watch('estrichThickness');
+  useEffect(() => {
+    const currentName = watchedValues.name || '';
+    if (!hasThicknessField(currentName)) return;
+    if (nameHasEmbeddedThickness(currentName)) return;
+    const baseName = currentName.replace(/\s*\(\d+\s*mm\)$/i, '').trim();
+    const newName = watchedThickness ? `${baseName} (${watchedThickness} mm)` : baseName;
+    if (newName !== currentName) {
+      setValue('name', newName);
+      setNameInput(newName);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedThickness]);
+
   const { data: allTemplates = [] } = useQuery(['templates', 'all'], () => getTemplates());
 
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -167,8 +209,12 @@ export default function PositionForm({
   }, []);
 
   const applyTemplate = (t: PositionTemplate) => {
-    setValue('name', t.name);
-    setNameInput(t.name);
+    const displayName = (t.estrichThickness && !nameHasEmbeddedThickness(t.name))
+      ? `${t.name} (${t.estrichThickness} mm)`
+      : t.name;
+    setValue('name', displayName);
+    setNameInput(displayName);
+    if (t.estrichThickness) setValue('estrichThickness', t.estrichThickness);
     setValue('category', t.category);
     if (t.bereich) setValue('bereich', t.bereich);
     if (t.bereichUnterpunkt) {
@@ -359,7 +405,11 @@ export default function PositionForm({
                         {items.map((t) => (
                           <button key={t._id} type="button" onMouseDown={() => applyTemplate(t)}
                             className="w-full text-left px-3 py-2 hover:bg-primary-50 flex items-center justify-between gap-2 border-b border-gray-50">
-                            <span className="text-sm text-gray-800">{t.name}</span>
+                            <span className="text-sm text-gray-800 flex items-center gap-1.5 flex-wrap">
+                              {t.name}
+                              {t.estrichThickness ? <span className="text-xs text-slate-500">{t.estrichThickness} mm</span> : null}
+                              {t.category && <span className="text-xs text-gray-400 italic">· {t.category}</span>}
+                            </span>
                             <span className="text-xs text-gray-400 shrink-0">
                               {t.unit}
                               {showAllPhases && <span className="ml-1 text-gray-300">· {PHASE_LABELS[t.phaseType] || t.phaseType}</span>}
@@ -414,8 +464,8 @@ export default function PositionForm({
               </select>
             </div>
 
-            {/* Estrich-Dicke (bedingt) */}
-            {watchedValues.name?.toLowerCase().includes('estrich') && (
+            {/* Dicke (bedingt – für Estrich, Dämmung, Putz, Beton usw.) */}
+            {hasThicknessField(watchedValues.name) && (
               <div>
                 <label className="label">Dicke (mm)</label>
                 <input {...register('estrichThickness', { valueAsNumber: true })} type="number" className="input" />

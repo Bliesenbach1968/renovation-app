@@ -172,6 +172,7 @@ export interface PositionTemplate {
   disposalCostPerUnit: number;
   laborHoursPerUnit: number;
   laborHourlyRate: number;
+  estrichThickness?: number | null;
   description?: string;
   isSystemDefault: boolean;
 }
