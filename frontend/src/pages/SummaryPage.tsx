@@ -3,7 +3,7 @@ import { useQuery } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { getProject, getProjectSummary } from '../api/projects';
+import { getProject, getProjectSummary, getRooms } from '../api/projects';
 import { getFinanceSummary } from '../api/finance';
 import type { ProjectSummary, Project } from '../types';
 import type { FinanceSummary } from '../domain/finance/VariableInterestEngine';
@@ -300,10 +300,38 @@ export default function SummaryPage() {
     () => getFinanceSummary(projectId!),
     { enabled: !!projectId, retry: false }
   );
+
+  // Alle Räume des Projekts laden – für Kosten-pro-m²-Berechnung
+  const { data: rooms } = useQuery(
+    ['rooms', projectId],
+    () => getRooms(projectId!),
+    { refetchInterval: 10_000 }
+  );
+
   if (isLoading) return <div className="p-6"><div className="animate-pulse h-8 w-64 bg-gray-200 rounded" /></div>;
 
   const phases = summary?.phases;
   const totals = summary?.totals;
+
+  // ─── Berechnung: Kosten pro m² ─────────────────────────────────────────────
+  //
+  // Variablen:
+  //   gesamtwohnflaeche  – Summe aller Raumflächen (Room.dimensions.area) in m²
+  //                        Das Unit-Modell hat keine eigene Flächenangabe;
+  //                        Wohnungsfläche = Summe der Räume dieser Wohnung.
+  //                        Deshalb werden nur Raumflächen summiert → keine Doppelerfassung.
+  //   kostenProM2        – Gesamtkosten (grandTotal) geteilt durch Gesamtwohnfläche
+  //
+  // Formel: kosten_pro_m2 = totals.grandTotal / Σ(room.dimensions.area)
+  //
+  // Validierung: Falls gesamtwohnflaeche = 0 → kostenProM2 = null → Hinweis anzeigen
+  const gesamtwohnflaeche = rooms
+    ? rooms.reduce((sum, r) => sum + (r.dimensions?.area ?? 0), 0)
+    : 0;
+
+  const kostenProM2 = gesamtwohnflaeche > 0 && totals
+    ? totals.grandTotal / gesamtwohnflaeche
+    : null;
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -384,6 +412,25 @@ export default function SummaryPage() {
               <p className="font-bold text-xl">{eur(totals.grandTotal)}</p>
               <p className="text-xs text-primary-200 mt-1">{totals.totalHours.toFixed(0)} Std. Arbeit</p>
             </div>
+          </div>
+
+          {/* Kosten pro m² – dynamisch aus Raumflächen berechnet */}
+          <div className="mt-3 pt-3 border-t border-primary-200">
+            {kostenProM2 !== null ? (
+              <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Kosten pro m²</p>
+                  <p className="text-xs text-blue-400 mt-0.5">
+                    Gesamtwohnfläche: {gesamtwohnflaeche.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m²
+                  </p>
+                </div>
+                <p className="text-xl font-bold text-blue-700">{eur(kostenProM2)}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-600 italic text-center py-1">
+                Keine Wohnfläche vorhanden – Kosten pro m² können nicht berechnet werden.
+              </p>
+            )}
           </div>
         </div>
       )}
