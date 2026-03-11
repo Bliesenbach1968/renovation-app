@@ -14,7 +14,6 @@ export const BEREICHE_ENTKERNUNG_RENOVIERUNG: string[] = [
   'VII. Fenster',
   'VIII. Fassade',
   'IX. Keller',
-  'X. Balkone',
   'XI. Pauschale Kosten',
 ];
 
@@ -280,8 +279,6 @@ export const BEREICHE_HIERARCHIE: Record<string, BereichNode[]> = {
     { label: '6. Bodenplatte prüfen' },
     { label: '7. Kellerfenster' },
   ],
-
-  'X. Balkone': [],
 
   'XI. Pauschale Kosten': [
     { label: '1. Gerüst' },

@@ -1,12 +1,99 @@
+import React from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { getProject, getProjectSummary, getRooms } from '../api/projects';
+import { getProject, getProjectSummary, getRooms, frierePlanwerteEin } from '../api/projects';
 import { getFinanceSummary } from '../api/finance';
-import type { ProjectSummary, Project } from '../types';
+import type { ProjectSummary, Project, BereichVergleichRow, PhaseType } from '../types';
 import type { FinanceSummary } from '../domain/finance/VariableInterestEngine';
+
+const PLAN_PHASE_NAMES: Record<string, string> = {
+  demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
+};
+const PLAN_PHASE_ORDER = ['demolition', 'renovation', 'specialConstruction'];
+
+function deltaColor(pct: number | null) {
+  if (pct === null) return 'text-gray-400';
+  if (Math.abs(pct) <= 2) return 'text-green-600';
+  if (Math.abs(pct) < 5)  return 'text-amber-600';
+  return 'text-red-600 font-semibold';
+}
+
+function PlanVsIstTabelle({ rows }: { rows: BereichVergleichRow[] }) {
+  const byPhase: Record<string, BereichVergleichRow[]> = {};
+  for (const row of rows) {
+    if (!byPhase[row.phaseType]) byPhase[row.phaseType] = [];
+    byPhase[row.phaseType].push(row);
+  }
+  const planVorhanden = rows.some((r) => r.plan !== null);
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400 italic py-1">Keine Positionen vorhanden.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200 text-gray-700">
+            <th className="text-left py-2 px-3 font-semibold w-32">Phase</th>
+            <th className="text-left py-2 px-3 font-semibold">Bereich</th>
+            <th className="text-right py-2 px-3 font-semibold">Plan (€)</th>
+            <th className="text-right py-2 px-3 font-semibold">Ist (€)</th>
+            <th className="text-right py-2 px-3 font-semibold">Δ (€)</th>
+            <th className="text-right py-2 px-3 font-semibold">Δ (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {PLAN_PHASE_ORDER.filter((p) => byPhase[p]).map((phase) => {
+            const phaseRows = byPhase[phase];
+            const subIst  = phaseRows.reduce((s, r) => s + r.ist, 0);
+            const subPlan = phaseRows.every((r) => r.plan !== null) ? phaseRows.reduce((s, r) => s + (r.plan ?? 0), 0) : null;
+            const subDelta = subPlan !== null ? subIst - subPlan : null;
+            const subPct  = subPlan !== null && subPlan !== 0 ? +((subDelta! / subPlan) * 100).toFixed(1) : null;
+            return (
+              <React.Fragment key={phase}>
+                <tr className="bg-gray-100 border-t-2 border-gray-300">
+                  <td colSpan={6} className="py-1.5 px-3 font-semibold text-gray-800 text-xs uppercase tracking-wide">
+                    {PLAN_PHASE_NAMES[phase]}
+                  </td>
+                </tr>
+                {phaseRows.map((row, i) => (
+                  <tr key={`${phase}-${i}`} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-2 px-3" />
+                    <td className="py-2 px-3 text-gray-700">{row.bereich ?? <span className="italic text-gray-400">Ohne Bereich</span>}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">{row.plan !== null ? eur(row.plan) : '–'}</td>
+                    <td className="py-2 px-3 text-right text-gray-900">{eur(row.ist)}</td>
+                    <td className={`py-2 px-3 text-right ${deltaColor(row.deltaPercent)}`}>{row.delta !== null ? eur(row.delta) : '–'}</td>
+                    <td className={`py-2 px-3 text-right ${deltaColor(row.deltaPercent)}`}>
+                      {row.deltaPercent !== null ? `${row.deltaPercent > 0 ? '+' : ''}${row.deltaPercent.toLocaleString('de-DE', { minimumFractionDigits: 1 })} %` : '–'}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-gray-300 bg-gray-50 font-semibold">
+                  <td className="py-2 px-3 text-gray-500 text-xs">Gesamt</td>
+                  <td className="py-2 px-3">{PLAN_PHASE_NAMES[phase]}</td>
+                  <td className="py-2 px-3 text-right">{subPlan !== null ? eur(subPlan) : '–'}</td>
+                  <td className="py-2 px-3 text-right">{eur(subIst)}</td>
+                  <td className={`py-2 px-3 text-right ${deltaColor(subPct)}`}>{subDelta !== null ? eur(subDelta) : '–'}</td>
+                  <td className={`py-2 px-3 text-right ${deltaColor(subPct)}`}>
+                    {subPct !== null ? `${subPct > 0 ? '+' : ''}${subPct.toLocaleString('de-DE', { minimumFractionDigits: 1 })} %` : '–'}
+                  </td>
+                </tr>
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="text-xs text-gray-400 mt-2">* Container, Gerüst und Kran sind nicht in der Bereich-Aufschlüsselung enthalten.</p>
+      {!planVorhanden && (
+        <p className="text-xs text-amber-600 mt-1 italic">Plankosten werden beim nächsten Aktivieren einer Phase eingefroren.</p>
+      )}
+    </div>
+  );
+}
 
 function eur(n: number) {
   return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -292,9 +379,17 @@ function FinanceKpiBar({ fin, projectId }: { fin: FinanceSummary; projectId: str
 export default function SummaryPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: summary, isLoading } = useQuery(['summary', projectId], () => getProjectSummary(projectId!), { refetchInterval: 10_000 });
+
+  const frierenMutation = useMutation(() => frierePlanwerteEin(projectId!), {
+    onSuccess: () => {
+      queryClient.invalidateQueries(['summary', projectId]);
+      queryClient.invalidateQueries(['project', projectId]);
+    },
+  });
   const { data: financeSummary } = useQuery(
     ['financeSummary', projectId],
     () => getFinanceSummary(projectId!),
@@ -434,6 +529,24 @@ export default function SummaryPage() {
           </div>
         </div>
       )}
+
+      {/* Plan vs. Ist je Bereich */}
+      <div className="card mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-900 text-lg">Plan vs. Ist nach Bereich</h3>
+          {summary?.bereichsVergleich && summary.bereichsVergleich.length > 0 && summary.bereichsVergleich.every((r) => r.plan === null) && (
+            <button
+              onClick={() => frierenMutation.mutate()}
+              disabled={frierenMutation.isLoading}
+              className="btn btn-sm btn-secondary"
+              title="Aktuelle Ist-Kosten als Planwerte einfrieren (einmalig)"
+            >
+              {frierenMutation.isLoading ? 'Wird eingefroren…' : 'Planwerte jetzt einfrieren'}
+            </button>
+          )}
+        </div>
+        <PlanVsIstTabelle rows={summary?.bereichsVergleich ?? []} />
+      </div>
 
       {/* Finanzierungs-KPIs (wenn Parameter konfiguriert) */}
       {financeSummary && projectId && (

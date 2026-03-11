@@ -186,8 +186,37 @@ exports.updateProject = async (req, res, next) => {
         .populate('team.userId', 'name email role');
     }
 
-    // Farbstatus aktualisieren wenn Projekt aktiviert wird
+    // Planwerte einfrieren wenn Projekt auf aktiv gesetzt wird
     if (req.body.status === 'active') {
+      const projectToFreeze = await Project.findById(req.params.id);
+      if (projectToFreeze) {
+        const phaseTypes = ['demolition', 'renovation', 'specialConstruction'];
+        const fieldMap = {
+          demolition:          'geplantePhasensummeEntkernung',
+          renovation:          'geplantePhasensummeRenovierung',
+          specialConstruction: 'geplantePhasensummeSonderarbeiten',
+        };
+        let gesamtsumme = 0;
+        for (const phaseType of phaseTypes) {
+          const bereichAgg = await Position.aggregate([
+            { $match: { projectId: projectToFreeze._id, phaseType } },
+            { $group: { _id: '$bereich', total: { $sum: '$totalCost' } } },
+          ]);
+          const phaseTotal = bereichAgg.reduce((s, r) => s + r.total, 0);
+          projectToFreeze[fieldMap[phaseType]] = +phaseTotal.toFixed(2);
+          gesamtsumme += phaseTotal;
+          for (const row of bereichAgg) {
+            const key = `${phaseType}::${row._id ?? '__kein_bereich__'}`;
+            projectToFreeze.geplanteBereichssummen.set(key, +row.total.toFixed(2));
+          }
+        }
+        projectToFreeze.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
+        projectToFreeze.markModified('geplanteBereichssummen');
+        await projectToFreeze.save();
+        project = await Project.findById(req.params.id)
+          .populate('createdBy', 'name email')
+          .populate('team.userId', 'name email role');
+      }
       await aktualisiereProjektFarbstatus(project._id);
     }
 
@@ -318,7 +347,38 @@ exports.getProjectSummary = async (req, res, next) => {
 
     Object.keys(grandTotal).forEach((k) => { grandTotal[k] = +grandTotal[k].toFixed(2); });
 
-    res.json({ success: true, data: { phases: phaseMap, totals: grandTotal } });
+    // Ist-Kosten je Phase+Bereich aggregieren
+    const bereichIstAgg = await Position.aggregate([
+      { $match: { projectId } },
+      { $group: { _id: { phaseType: '$phaseType', bereich: '$bereich' }, total: { $sum: '$totalCost' } } },
+    ]);
+
+    // Planwerte aus dem Projekt-Dokument laden
+    const projectDoc = await Project.findById(req.params.id).select('geplanteBereichssummen');
+    const planMap = projectDoc?.geplanteBereichssummen ?? new Map();
+
+    const bereichsVergleich = bereichIstAgg.map((row) => {
+      const phaseType = row._id.phaseType;
+      const bereich   = row._id.bereich ?? null;
+      const key       = `${phaseType}::${bereich ?? '__kein_bereich__'}`;
+      const ist       = +row.total.toFixed(2);
+      const plan      = planMap.has(key) ? planMap.get(key) : null;
+      const delta     = plan != null ? +(ist - plan).toFixed(2) : null;
+      const deltaPercent = plan != null && plan !== 0
+        ? +((delta / plan) * 100).toFixed(1)
+        : null;
+      return { phaseType, bereich, ist, plan, delta, deltaPercent };
+    });
+
+    // Nach Phase + Bereich sortieren
+    const phaseOrder = { demolition: 0, renovation: 1, specialConstruction: 2 };
+    bereichsVergleich.sort((a, b) => {
+      const pd = (phaseOrder[a.phaseType] ?? 9) - (phaseOrder[b.phaseType] ?? 9);
+      if (pd !== 0) return pd;
+      return (a.bereich ?? '').localeCompare(b.bereich ?? '', 'de');
+    });
+
+    res.json({ success: true, data: { phases: phaseMap, totals: grandTotal, bereichsVergleich } });
   } catch (err) { next(err); }
 };
 
@@ -419,6 +479,17 @@ exports.updatePhaseStatus = async (req, res, next) => {
         (project.geplantePhasensummeRenovierung   || 0) +
         (project.geplantePhasensummeSonderarbeiten || 0);
       project.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
+
+      // Plankosten je Bereich für diese Phase einfrieren
+      const bereichAgg = await Position.aggregate([
+        { $match: { projectId: new mongoose.Types.ObjectId(req.params.id), phaseType: phase.type } },
+        { $group: { _id: '$bereich', total: { $sum: '$totalCost' } } },
+      ]);
+      for (const row of bereichAgg) {
+        const key = `${phase.type}::${row._id ?? '__kein_bereich__'}`;
+        project.geplanteBereichssummen.set(key, +row.total.toFixed(2));
+      }
+      project.markModified('geplanteBereichssummen');
     }
 
     await project.save();
@@ -444,5 +515,43 @@ exports.getAuditLog = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(100);
     res.json({ success: true, count: logs.length, data: logs });
+  } catch (err) { next(err); }
+};
+
+// POST /api/v1/projects/:id/planwerte-einfrieren
+// Friert die aktuellen Positionskosten als Planwerte ein (für bereits aktivierte Projekte ohne Planwerte)
+exports.frierePlanwerteEin = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: 'Projekt nicht gefunden' });
+
+    const phaseTypes = ['demolition', 'renovation', 'specialConstruction'];
+    const fieldMap = {
+      demolition:          'geplantePhasensummeEntkernung',
+      renovation:          'geplantePhasensummeRenovierung',
+      specialConstruction: 'geplantePhasensummeSonderarbeiten',
+    };
+
+    let gesamtsumme = 0;
+    for (const phaseType of phaseTypes) {
+      const bereichAgg = await Position.aggregate([
+        { $match: { projectId: project._id, phaseType } },
+        { $group: { _id: '$bereich', total: { $sum: '$totalCost' } } },
+      ]);
+      const phaseTotal = bereichAgg.reduce((s, r) => s + r.total, 0);
+      project[fieldMap[phaseType]] = +phaseTotal.toFixed(2);
+      gesamtsumme += phaseTotal;
+      for (const row of bereichAgg) {
+        const key = `${phaseType}::${row._id ?? '__kein_bereich__'}`;
+        project.geplanteBereichssummen.set(key, +row.total.toFixed(2));
+      }
+    }
+    project.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
+    project.markModified('geplanteBereichssummen');
+    await project.save();
+
+    await aktualisiereProjektFarbstatus(project._id);
+
+    res.json({ success: true, message: 'Planwerte eingefroren' });
   } catch (err) { next(err); }
 };

@@ -66,11 +66,18 @@ const projectSchema = new mongoose.Schema(
     tiefgarageStellplaetze: { type: Number, default: 0, min: 0 },
     aussenanlagenVorhanden: { type: Boolean, default: false },
 
+    // Aktuelle Ist-Gesamtsumme (wird bei jeder Positions-/Container-Änderung aktualisiert)
+    aktuelleGesamtsumme: { type: Number, default: null },
+
     // Geplante Phasensummen (werden bei planned→active Übergang gespeichert)
     geplantePhasensummeEntkernung:     { type: Number, default: null },
     geplantePhasensummeRenovierung:    { type: Number, default: null },
     geplantePhasensummeSonderarbeiten: { type: Number, default: null },
     geplanteGesamtsummeProjekt:        { type: Number, default: null },
+
+    // Geplante Kosten je Phase+Bereich (Key: "phaseType::bereich")
+    // Wird beim planned→active Übergang je Phase eingefroren
+    geplanteBereichssummen: { type: Map, of: Number, default: {} },
 
     // Farbstatus für das Feld geplanteGesamtsummeProjekt im Dashboard.
     // Wird dynamisch berechnet: Abweichung aktuelleGesamtsumme vs. geplanteGesamtsummeProjekt.

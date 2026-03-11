@@ -27,7 +27,7 @@ const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten', all: 'Alle Phasen',
 };
 
-export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Balkone', 'Betonsanierung', 'Container & Entsorgung', 'Gerüst', 'Kran'];
+export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Betonsanierung', 'Container & Entsorgung', 'Gerüst', 'Kran', 'Pauschal'];
 // Legacy-Exporte für Kompatibilität
 export const BEREICH_UNTERPUNKTE: Record<string, string[]> = {};
 

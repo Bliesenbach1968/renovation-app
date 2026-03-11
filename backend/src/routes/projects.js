@@ -24,4 +24,6 @@ router.patch('/:id/phases/:phaseId', authorizeProjectAccess, authorize('admin', 
 router.post('/:id/team',             authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.addTeamMember);
 router.delete('/:id/team/:userId',   authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.removeTeamMember);
 
+router.post('/:id/planwerte-einfrieren', authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.frierePlanwerteEin);
+
 module.exports = router;

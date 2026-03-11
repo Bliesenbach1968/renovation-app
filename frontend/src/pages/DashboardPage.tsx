@@ -104,14 +104,13 @@ function ProjectCard({ project, onDelete, isAdmin }: { project: Project; onDelet
             </svg>
             {completedPhases}/{project.phases.length} Phasen
           </span>
-          {project.geplanteGesamtsummeProjekt != null && (() => {
-            // Farbkonfiguration aus Statusfeld laden; null → neutrale Darstellung
+          {project.aktuelleGesamtsumme != null && (() => {
+            // Farbkonfiguration: Abweichung Ist vs. Plan (nur wenn Planwert vorhanden)
             const farbCfg = project.farbeGeplanteGesamtsummeProjekt
               ? GESAMTSUMME_FARBE[project.farbeGeplanteGesamtsummeProjekt]
               : null;
-            const vollbetrag = fmtVoll(project.geplanteGesamtsummeProjekt);
-            // Tooltip: Vollbetrag + ggf. Farbstatus-Label
-            const tooltip = farbCfg ? `${vollbetrag} – ${farbCfg.label}` : vollbetrag;
+            const vollbetrag = fmtVoll(project.aktuelleGesamtsumme);
+            const tooltip = farbCfg ? `Ist: ${vollbetrag} – ${farbCfg.label}` : `Aktuelle Kosten: ${vollbetrag}`;
             return (
               <span
                 title={tooltip}
@@ -121,8 +120,7 @@ function ProjectCard({ project, onDelete, isAdmin }: { project: Project; onDelet
                     : 'text-slate-500'
                 }`}
               >
-                {/* Kompakte Darstellung: ≥ 1 Mio. → "10,0 Mio. €"; sonst volle Zahl */}
-                {fmtKompakt(project.geplanteGesamtsummeProjekt)}
+                {fmtKompakt(project.aktuelleGesamtsumme)}
               </span>
             );
           })()}

@@ -49,6 +49,7 @@ export interface Project {
   tiefgarage?: boolean;
   tiefgarageStellplaetze?: number;
   aussenanlagenVorhanden?: boolean;
+  aktuelleGesamtsumme?: number | null;
   geplantePhasensummeEntkernung?: number | null;
   geplantePhasensummeRenovierung?: number | null;
   geplantePhasensummeSonderarbeiten?: number | null;
@@ -189,7 +190,17 @@ export interface PhaseSummary {
   positionCount: number;
 }
 
+export interface BereichVergleichRow {
+  phaseType: PhaseType;
+  bereich: string | null;
+  ist: number;
+  plan: number | null;
+  delta: number | null;
+  deltaPercent: number | null;
+}
+
 export interface ProjectSummary {
   phases: Record<PhaseType, PhaseSummary>;
   totals: { materialCost: number; disposalCost: number; laborCost: number; containerCost: number; geruestCost: number; kranCost: number; grandTotal: number; totalHours: number; };
+  bereichsVergleich?: BereichVergleichRow[];
 }

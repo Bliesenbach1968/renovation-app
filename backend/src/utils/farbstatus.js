@@ -61,6 +61,10 @@ async function aktualisiereProjektFarbstatus(projectId) {
     .select('status geplanteGesamtsummeProjekt farbeGeplanteGesamtsummeProjekt');
   if (!project) return;
 
+  // aktuelleGesamtsumme immer berechnen und speichern
+  const aktuelleGesamtsumme = await berechneAktuelleGesamtsumme(projectId);
+  await Project.findByIdAndUpdate(projectId, { aktuelleGesamtsumme });
+
   // Farbstatus ist nur bei aktivem Projekt mit gesetzter geplanter Summe sinnvoll
   if (project.status !== 'active' || project.geplanteGesamtsummeProjekt == null) {
     if (project.farbeGeplanteGesamtsummeProjekt !== null) {
@@ -69,10 +73,9 @@ async function aktualisiereProjektFarbstatus(projectId) {
     return;
   }
 
-  const aktuelleGesamtsumme = await berechneAktuelleGesamtsumme(projectId);
   const neuerFarbstatus = berechneFarbe(project.geplanteGesamtsummeProjekt, aktuelleGesamtsumme);
 
-  // Nur schreiben wenn sich etwas geändert hat (DB-Schreibvorgang sparen)
+  // Farbstatus nur bei Änderung schreiben
   if (project.farbeGeplanteGesamtsummeProjekt !== neuerFarbstatus) {
     await Project.findByIdAndUpdate(projectId, { farbeGeplanteGesamtsummeProjekt: neuerFarbstatus });
   }
