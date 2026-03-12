@@ -556,13 +556,37 @@ export default function BuildingPage() {
     { enabled: !!projectId }
   );
 
+  const { data: containerItems = [] } = useQuery(
+    ['containers', projectId],
+    () => getContainers(projectId!),
+    { enabled: !!projectId }
+  );
+  const { data: geruestItems = [] } = useQuery(
+    ['gerueste', projectId],
+    () => getGerueste(projectId!),
+    { enabled: !!projectId }
+  );
+  const { data: kranItems = [] } = useQuery(
+    ['kraene', projectId],
+    () => getKraene(projectId!),
+    { enabled: !!projectId }
+  );
+
   const bereichCount = useMemo(() => {
     const map: Record<string, number> = {};
     (allPhasePositions as Position[]).forEach(p => {
       if (p.bereich && !p.roomId) map[p.bereich] = (map[p.bereich] || 0) + 1;
     });
+    if (selectedPhase === 'specialConstruction') {
+      const cCount = (containerItems as Container[]).length;
+      const gCount = (geruestItems as Geruest[]).length;
+      const kCount = (kranItems as Kran[]).length;
+      if (cCount > 0) map['Container & Entsorgung'] = cCount;
+      if (gCount > 0) map['Gerüst'] = gCount;
+      if (kCount > 0) map['Kran'] = kCount;
+    }
     return map;
-  }, [allPhasePositions]);
+  }, [allPhasePositions, containerItems, geruestItems, kranItems, selectedPhase]);
 
   const usedBereiche = useMemo(() => {
     const fromStatic = getBereicheForPhase(selectedPhase, floors);
@@ -692,6 +716,13 @@ export default function BuildingPage() {
       </div>
 
       {/* Bereich-Vorlagen-Panel */}
+      {!selectedBereich && selectedPhase === 'specialConstruction' && (
+        <div className="space-y-0 mb-2">
+          <ContainerPanel projectId={projectId!} />
+          <GeruestPanel projectId={projectId!} />
+          <KranPanel projectId={projectId!} />
+        </div>
+      )}
       {selectedBereich && (
         SPECIAL_BEREICHE.includes(selectedBereich)
           ? selectedBereich === 'Container & Entsorgung'

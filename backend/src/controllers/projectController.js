@@ -9,6 +9,12 @@ const { calculateDelay } = require('../utils/calculations');
 const { createAuditLog } = require('../middleware/auditLog');
 const { aktualisiereProjektFarbstatus } = require('../utils/farbstatus');
 
+// Mongoose Maps erlauben keine Punkte in Keys → ersetzen durch sicheres Zeichen
+function mkMapKey(phaseType, bereich) {
+  const b = (bereich ?? '__kein_bereich__').replace(/\./g, '\u00B7');
+  return `${phaseType}::${b}`;
+}
+
 // GET /api/v1/projects
 exports.getProjects = async (req, res, next) => {
   try {
@@ -206,7 +212,7 @@ exports.updateProject = async (req, res, next) => {
           projectToFreeze[fieldMap[phaseType]] = +phaseTotal.toFixed(2);
           gesamtsumme += phaseTotal;
           for (const row of bereichAgg) {
-            const key = `${phaseType}::${row._id ?? '__kein_bereich__'}`;
+            const key = mkMapKey(phaseType, row._id ?? null);
             projectToFreeze.geplanteBereichssummen.set(key, +row.total.toFixed(2));
           }
         }
@@ -347,11 +353,27 @@ exports.getProjectSummary = async (req, res, next) => {
 
     Object.keys(grandTotal).forEach((k) => { grandTotal[k] = +grandTotal[k].toFixed(2); });
 
-    // Ist-Kosten je Phase+Bereich aggregieren
+    // Ist-Kosten je Phase+Bereich aggregieren (Positionen)
     const bereichIstAgg = await Position.aggregate([
       { $match: { projectId } },
       { $group: { _id: { phaseType: '$phaseType', bereich: '$bereich' }, total: { $sum: '$totalCost' } } },
     ]);
+
+    // Container/Gerüst/Kran-Modellkosten in Bereich-Aggregation einbeziehen
+    const CGK_BEREICH_MAP = [
+      { agg: containerAgg, costField: 'containerCost', bereich: 'Container & Entsorgung' },
+      { agg: geruestAgg,   costField: 'geruestCost',   bereich: 'Gerüst' },
+      { agg: kranAgg,      costField: 'kranCost',      bereich: 'Kran' },
+    ];
+    for (const { agg, costField, bereich } of CGK_BEREICH_MAP) {
+      for (const row of agg) {
+        const total = row[costField] || 0;
+        if (total === 0) continue;
+        const existing = bereichIstAgg.find((r) => r._id.phaseType === row._id && r._id.bereich === bereich);
+        if (existing) { existing.total += total; }
+        else { bereichIstAgg.push({ _id: { phaseType: row._id, bereich }, total }); }
+      }
+    }
 
     // Planwerte aus dem Projekt-Dokument laden
     const projectDoc = await Project.findById(req.params.id).select('geplanteBereichssummen');
@@ -360,7 +382,7 @@ exports.getProjectSummary = async (req, res, next) => {
     const bereichsVergleich = bereichIstAgg.map((row) => {
       const phaseType = row._id.phaseType;
       const bereich   = row._id.bereich ?? null;
-      const key       = `${phaseType}::${bereich ?? '__kein_bereich__'}`;
+      const key       = mkMapKey(phaseType, bereich);
       const ist       = +row.total.toFixed(2);
       const plan      = planMap.has(key) ? planMap.get(key) : null;
       const delta     = plan != null ? +(ist - plan).toFixed(2) : null;
@@ -370,11 +392,32 @@ exports.getProjectSummary = async (req, res, next) => {
       return { phaseType, bereich, ist, plan, delta, deltaPercent };
     });
 
+    // Alle Sonderarbeiten-Bereiche immer anzeigen, auch ohne Positionen
+    const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Betonsanierung', 'Container & Entsorgung', 'Gerüst', 'Kran', 'Pauschal'];
+    const existingSonderbereiche = new Set(
+      bereichsVergleich.filter((r) => r.phaseType === 'specialConstruction').map((r) => r.bereich)
+    );
+    for (const bereich of BEREICHE_SONDERARBEITEN) {
+      if (!existingSonderbereiche.has(bereich)) {
+        const key = mkMapKey('specialConstruction', bereich);
+        const plan = planMap.has(key) ? planMap.get(key) : null;
+        const delta = plan != null ? +(-plan).toFixed(2) : null;
+        const deltaPercent = plan != null && plan !== 0 ? +((-plan / plan) * 100).toFixed(1) : null;
+        bereichsVergleich.push({ phaseType: 'specialConstruction', bereich, ist: 0, plan, delta, deltaPercent });
+      }
+    }
+
     // Nach Phase + Bereich sortieren
     const phaseOrder = { demolition: 0, renovation: 1, specialConstruction: 2 };
+    const sonderOrder = BEREICHE_SONDERARBEITEN.reduce((m, b, i) => { m[b] = i; return m; }, {});
     bereichsVergleich.sort((a, b) => {
       const pd = (phaseOrder[a.phaseType] ?? 9) - (phaseOrder[b.phaseType] ?? 9);
       if (pd !== 0) return pd;
+      if (a.phaseType === 'specialConstruction') {
+        const ia = sonderOrder[a.bereich] ?? 99;
+        const ib = sonderOrder[b.bereich] ?? 99;
+        return ia - ib;
+      }
       return (a.bereich ?? '').localeCompare(b.bereich ?? '', 'de');
     });
 
@@ -480,14 +523,29 @@ exports.updatePhaseStatus = async (req, res, next) => {
         (project.geplantePhasensummeSonderarbeiten || 0);
       project.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
 
-      // Plankosten je Bereich für diese Phase einfrieren
+      // Plankosten je Bereich für diese Phase einfrieren (Positionen)
+      const pid = new mongoose.Types.ObjectId(req.params.id);
       const bereichAgg = await Position.aggregate([
-        { $match: { projectId: new mongoose.Types.ObjectId(req.params.id), phaseType: phase.type } },
+        { $match: { projectId: pid, phaseType: phase.type } },
         { $group: { _id: '$bereich', total: { $sum: '$totalCost' } } },
       ]);
       for (const row of bereichAgg) {
-        const key = `${phase.type}::${row._id ?? '__kein_bereich__'}`;
+        const key = mkMapKey(phase.type, row._id ?? null);
         project.geplanteBereichssummen.set(key, +row.total.toFixed(2));
+      }
+      // Container/Gerüst/Kran-Modellkosten ebenfalls einfrieren
+      const [cA, gA, kA] = await Promise.all([
+        Container.aggregate([{ $match: { projectId: pid, phaseType: phase.type } }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+        Geruest.aggregate([{   $match: { projectId: pid, phaseType: phase.type } }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+        Kran.aggregate([{      $match: { projectId: pid, phaseType: phase.type } }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+      ]);
+      const cgkFreeze = [
+        { total: cA[0]?.total || 0, bereich: 'Container & Entsorgung' },
+        { total: gA[0]?.total || 0, bereich: 'Gerüst' },
+        { total: kA[0]?.total || 0, bereich: 'Kran' },
+      ];
+      for (const { total, bereich } of cgkFreeze) {
+        if (total > 0) project.geplanteBereichssummen.set(mkMapKey(phase.type, bereich), +total.toFixed(2));
       }
       project.markModified('geplanteBereichssummen');
     }
@@ -538,12 +596,26 @@ exports.frierePlanwerteEin = async (req, res, next) => {
         { $match: { projectId: project._id, phaseType } },
         { $group: { _id: '$bereich', total: { $sum: '$totalCost' } } },
       ]);
-      const phaseTotal = bereichAgg.reduce((s, r) => s + r.total, 0);
+      const [cA, gA, kA] = await Promise.all([
+        Container.aggregate([{ $match: { projectId: project._id, phaseType } }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+        Geruest.aggregate([{   $match: { projectId: project._id, phaseType } }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+        Kran.aggregate([{      $match: { projectId: project._id, phaseType } }, { $group: { _id: null, total: { $sum: '$totalCost' } } }]),
+      ]);
+      const phaseTotal = bereichAgg.reduce((s, r) => s + r.total, 0)
+        + (cA[0]?.total || 0) + (gA[0]?.total || 0) + (kA[0]?.total || 0);
       project[fieldMap[phaseType]] = +phaseTotal.toFixed(2);
       gesamtsumme += phaseTotal;
       for (const row of bereichAgg) {
-        const key = `${phaseType}::${row._id ?? '__kein_bereich__'}`;
+        const key = mkMapKey(phaseType, row._id ?? null);
         project.geplanteBereichssummen.set(key, +row.total.toFixed(2));
+      }
+      const cgk = [
+        { total: cA[0]?.total || 0, bereich: 'Container & Entsorgung' },
+        { total: gA[0]?.total || 0, bereich: 'Gerüst' },
+        { total: kA[0]?.total || 0, bereich: 'Kran' },
+      ];
+      for (const { total, bereich } of cgk) {
+        if (total > 0) project.geplanteBereichssummen.set(mkMapKey(phaseType, bereich), +total.toFixed(2));
       }
     }
     project.geplanteGesamtsummeProjekt = +gesamtsumme.toFixed(2);
@@ -553,5 +625,26 @@ exports.frierePlanwerteEin = async (req, res, next) => {
     await aktualisiereProjektFarbstatus(project._id);
 
     res.json({ success: true, message: 'Planwerte eingefroren' });
+  } catch (err) { next(err); }
+};
+
+// DELETE /api/v1/projects/:id/planwerte-einfrieren
+// Hebt das Einfrieren der Planwerte auf – setzt geplanteBereichssummen und Phasensummen zurück
+exports.loeschePlanwerte = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: 'Projekt nicht gefunden' });
+
+    project.geplanteBereichssummen = new Map();
+    project.geplanteGesamtsummeProjekt = 0;
+    project.geplantePhasensummeEntkernung     = 0;
+    project.geplantePhasensummeRenovierung    = 0;
+    project.geplantePhasensummeSonderarbeiten = 0;
+    project.markModified('geplanteBereichssummen');
+    await project.save();
+
+    await aktualisiereProjektFarbstatus(project._id);
+
+    res.json({ success: true, message: 'Planwerte zurückgesetzt' });
   } catch (err) { next(err); }
 };

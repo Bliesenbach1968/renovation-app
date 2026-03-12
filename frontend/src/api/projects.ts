@@ -19,7 +19,8 @@ export const updateProject = async (id: string, body: Partial<Project>) => {
   return data.data as Project;
 };
 export const deleteProject = async (id: string) => client.delete(`/projects/${id}`);
-export const frierePlanwerteEin = async (id: string) => client.post(`/projects/${id}/planwerte-einfrieren`);
+export const frierePlanwerteEin  = async (id: string) => client.post(`/projects/${id}/planwerte-einfrieren`);
+export const loeschePlanwerte    = async (id: string) => client.delete(`/projects/${id}/planwerte-einfrieren`);
 export const getProjectSummary = async (id: string) => {
   const { data } = await client.get(`/projects/${id}/summary`);
   return data.data as ProjectSummary;
