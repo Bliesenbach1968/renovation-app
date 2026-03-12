@@ -80,13 +80,17 @@ export default function PositionForm({
   const urlBereich = searchParams.get('bereich') || '';
   const urlUnterpunkt = searchParams.get('unterpunkt') || '';
 
-  const floorArea = roomDimensions?.area ?? (roomDimensions?.length && roomDimensions?.width
-    ? +(roomDimensions.length * roomDimensions.width).toFixed(2) : undefined);
-  const wallArea = roomDimensions?.length && roomDimensions?.width && roomDimensions?.height
-    ? +(2 * (roomDimensions.length + roomDimensions.width) * roomDimensions.height).toFixed(2)
+  // Wenn Raum aus Dropdown gewählt, dessen Maße bevorzugen
+  const selectedRoom = rooms?.find(r => r._id === internalRoomId);
+  const effectiveDimensions = selectedRoom?.dimensions ?? roomDimensions;
+
+  const floorArea = effectiveDimensions?.area ?? (effectiveDimensions?.length && effectiveDimensions?.width
+    ? +(effectiveDimensions.length * effectiveDimensions.width).toFixed(2) : undefined);
+  const wallArea = effectiveDimensions?.length && effectiveDimensions?.width && effectiveDimensions?.height
+    ? +(2 * (effectiveDimensions.length + effectiveDimensions.width) * effectiveDimensions.height).toFixed(2)
     : undefined;
-  const perimeter = roomDimensions?.length && roomDimensions?.width
-    ? +(2 * (roomDimensions.length + roomDimensions.width)).toFixed(2)
+  const perimeter = effectiveDimensions?.length && effectiveDimensions?.width
+    ? +(2 * (effectiveDimensions.length + effectiveDimensions.width)).toFixed(2)
     : undefined;
 
   // Parse existing bereichUnterpunkt into sub-levels for cascading dropdowns
@@ -236,7 +240,7 @@ export default function PositionForm({
     } else if (t.unit === 'lfm') {
       setValue('quantity', perimeter ?? 0);
     } else if (t.unit === 'm³') {
-      setValue('quantity', roomDimensions?.volume ?? 0);
+      setValue('quantity', effectiveDimensions?.volume ?? 0);
     }
   };
 
@@ -316,6 +320,25 @@ export default function PositionForm({
                     </option>
                   ))}
                 </select>
+                {internalRoomId && (floorArea != null || wallArea != null) && (
+                  <div className="flex gap-2 mt-1.5">
+                    {floorArea != null && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2 py-0.5">
+                        Boden: <strong>{floorArea} m²</strong>
+                      </span>
+                    )}
+                    {wallArea != null && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-slate-50 text-slate-700 border border-slate-200 rounded px-2 py-0.5">
+                        Wand: <strong>{wallArea} m²</strong>
+                      </span>
+                    )}
+                    {perimeter != null && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
+                        Umfang: <strong>{perimeter} lfm</strong>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
