@@ -60,19 +60,7 @@ export default function Layout() {
           {ICONS.hamburger}
         </button>
         <div className="flex items-center gap-2">
-          <div
-            className="w-7 h-7 flex items-center justify-center shrink-0"
-            style={{
-              background: 'linear-gradient(145deg, #147CE5 0%, #0071E3 100%)',
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(0,113,227,0.40)',
-            }}
-          >
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21" />
-            </svg>
-          </div>
-          <p className="text-white text-[13px] font-bold leading-tight tracking-tight">Sanierungsprojekte</p>
+          <img src="/logo.png" alt="Renova Plan Logo" className="h-24 w-auto object-contain" />
         </div>
       </div>
 
@@ -91,25 +79,8 @@ export default function Layout() {
       >
         {/* Brand */}
         <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 flex items-center justify-center shrink-0"
-              style={{
-                background: 'linear-gradient(145deg, #147CE5 0%, #0071E3 100%)',
-                borderRadius: '10px',
-                boxShadow: '0 2px 8px rgba(0,113,227,0.40)',
-              }}
-            >
-              <svg className="w-[18px] h-[18px] text-white" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <p className="text-white text-[13px] font-bold leading-tight tracking-tight">Sanierungsprojekte</p>
-              <p className="text-[11px] leading-tight mt-0.5 font-medium" style={{ color: 'rgba(0,113,227,0.9)' }}>
-                Projektverwaltung
-              </p>
-            </div>
+          <div className="flex items-center">
+            <img src="/logo.png" alt="Renova Plan Logo" className="h-[120px] w-auto object-contain" />
           </div>
         </div>
 

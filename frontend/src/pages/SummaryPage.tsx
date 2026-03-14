@@ -174,7 +174,6 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
     if (!d) continue;
     const phaseName = PHASE_NAMES[phase];
 
-    // Kostenübersicht der Phase
     const costRows: [string, string][] = [
       ['Materialkosten', eur(d.materialCost)],
       ['Entsorgungskosten', eur(d.disposalCost)],
@@ -204,7 +203,6 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
 
     y = (doc as any).lastAutoTable.finalY + 6;
 
-    // Seitenumbruch prüfen
     if (y > 260 && phase !== 'specialConstruction') {
       doc.addPage();
       y = 15;
@@ -218,7 +216,6 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
     ['Entsorgungskosten', eur(t.disposalCost)],
     ['Arbeitskosten', eur(t.laborCost)],
   ];
-  // Seitenumbruch wenn nötig
   if (y + 10 + totalRows.length * 8 + 20 > 280) {
     doc.addPage();
     y = 15;
@@ -243,6 +240,114 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
     styles: { fontSize: 10, cellPadding: 3 },
     bodyStyles: { textColor: [30, 30, 30] },
   });
+
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  // ── Plan vs. Ist nach Bereich ──────────────────────────────────────────────
+  const bereichRows = summary.bereichsVergleich ?? [];
+  if (bereichRows.length > 0) {
+    if (y + 40 > 270) {
+      doc.addPage();
+      y = 15;
+    }
+
+    const byPhase: Record<string, BereichVergleichRow[]> = {};
+    for (const row of bereichRows) {
+      if (!byPhase[row.phaseType]) byPhase[row.phaseType] = [];
+      byPhase[row.phaseType].push(row);
+    }
+
+    const GREEN:  [number, number, number] = [22,  163, 74];
+    const AMBER:  [number, number, number] = [180, 120,  0];
+    const RED:    [number, number, number] = [220,  38, 38];
+    const GRAY:   [number, number, number] = [120, 120, 120];
+
+    const tableBody: any[] = [];
+    for (const phase of PLAN_PHASE_ORDER.filter((p) => byPhase[p])) {
+      const phaseRows = byPhase[phase];
+      // Phasenkopf
+      tableBody.push([{
+        content: PLAN_PHASE_NAMES[phase],
+        colSpan: 6,
+        styles: { fillColor: [50, 75, 110] as [number,number,number], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      }]);
+
+      for (const row of phaseRows) {
+        const planAnzeige = row.plan !== null ? row.plan : row.ist;
+        const istAnzeige  = row.plan !== null ? row.ist  : null;
+        const pct = row.deltaPercent;
+        const deltaColor: [number, number, number] = pct === null ? GRAY : Math.abs(pct) <= 2 ? GREEN : Math.abs(pct) < 5 ? AMBER : RED;
+
+        tableBody.push([
+          '',
+          { content: row.bereich ?? 'Ohne Bereich', styles: { textColor: [50, 50, 50] as [number,number,number] } },
+          { content: eur(planAnzeige), styles: { halign: 'right' } },
+          { content: istAnzeige !== null ? eur(istAnzeige) : '–', styles: { halign: 'right' } },
+          { content: row.delta !== null ? eur(row.delta) : '–', styles: { halign: 'right', textColor: deltaColor } },
+          {
+            content: pct !== null ? `${pct > 0 ? '+' : ''}${pct.toLocaleString('de-DE', { minimumFractionDigits: 1 })} %` : '–',
+            styles: { halign: 'right', textColor: deltaColor },
+          },
+        ]);
+      }
+
+      // Phasengesamt
+      const subIst  = phaseRows.reduce((s, r) => s + r.ist, 0);
+      const subPlan = phaseRows.every((r) => r.plan !== null)
+        ? phaseRows.reduce((s, r) => s + (r.plan ?? 0), 0)
+        : null;
+      const subDelta = subPlan !== null ? subIst - subPlan : null;
+      const subPct   = subPlan !== null && subPlan !== 0 ? +((subDelta! / subPlan) * 100).toFixed(1) : null;
+      const subPlanAnzeige = subPlan !== null ? subPlan : subIst;
+      const subIstAnzeige  = subPlan !== null ? subIst  : null;
+      const subColor: [number, number, number] = subPct === null ? GRAY : Math.abs(subPct) <= 2 ? GREEN : Math.abs(subPct) < 5 ? AMBER : RED;
+
+      tableBody.push([
+        { content: 'Gesamt', styles: { fontStyle: 'bold', textColor: [80, 80, 80] as [number,number,number], fontSize: 7, fillColor: [242, 244, 248] as [number,number,number] } },
+        { content: PLAN_PHASE_NAMES[phase], styles: { fontStyle: 'bold', fillColor: [242, 244, 248] as [number,number,number] } },
+        { content: eur(subPlanAnzeige), styles: { halign: 'right', fontStyle: 'bold', fillColor: [242, 244, 248] as [number,number,number] } },
+        { content: subIstAnzeige !== null ? eur(subIstAnzeige) : '–', styles: { halign: 'right', fontStyle: 'bold', fillColor: [242, 244, 248] as [number,number,number] } },
+        { content: subDelta !== null ? eur(subDelta) : '–', styles: { halign: 'right', fontStyle: 'bold', textColor: subColor, fillColor: [242, 244, 248] as [number,number,number] } },
+        { content: subPct !== null ? `${subPct > 0 ? '+' : ''}${subPct.toLocaleString('de-DE', { minimumFractionDigits: 1 })} %` : '–', styles: { halign: 'right', fontStyle: 'bold', textColor: subColor, fillColor: [242, 244, 248] as [number,number,number] } },
+      ]);
+    }
+
+    const colWidths = [colW * 0.07, colW * 0.28, colW * 0.17, colW * 0.17, colW * 0.17, colW * 0.14];
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      tableWidth: colW,
+      head: [[
+        { content: 'Phase', styles: { halign: 'left', fillColor: DARK_BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 } },
+        { content: 'Bereich', styles: { halign: 'left', fillColor: DARK_BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 } },
+        { content: 'Plan (€)', styles: { halign: 'right', fillColor: DARK_BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 } },
+        { content: 'Ist (€)', styles: { halign: 'right', fillColor: DARK_BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 } },
+        { content: 'Abw. (€)', styles: { halign: 'right', fillColor: DARK_BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 } },
+        { content: 'Abw. (%)', styles: { halign: 'right', fillColor: DARK_BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 } },
+      ]],
+      body: tableBody,
+      columnStyles: {
+        0: { cellWidth: colWidths[0] },
+        1: { cellWidth: colWidths[1] },
+        2: { cellWidth: colWidths[2], halign: 'right' },
+        3: { cellWidth: colWidths[3], halign: 'right' },
+        4: { cellWidth: colWidths[4], halign: 'right' },
+        5: { cellWidth: colWidths[5], halign: 'right' },
+      },
+      styles: { fontSize: 8, cellPadding: 2 },
+      bodyStyles: { textColor: [30, 30, 30] },
+      alternateRowStyles: {},
+      didDrawPage: (data) => {
+        // Sektionsüberschrift auf Folgeseiten
+        if (data.pageNumber > 1) {
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text('Plan vs. Ist nach Bereich (Fortsetzung)', margin, 10);
+          doc.setTextColor(0, 0, 0);
+        }
+      },
+    });
+  }
 
   // ── Fußzeile ──────────────────────────────────────────────────────────────
   const pageCount = (doc.internal as any).getNumberOfPages();
@@ -334,6 +439,69 @@ function downloadExcel(project: Project, summary: ProjectSummary) {
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{ wch: 24 }, { wch: 18 }];
     XLSX.utils.book_append_sheet(wb, ws, PHASE_NAMES[phase]);
+  }
+
+  // ── Plan vs. Ist nach Bereich ────────────────────────────────────────────
+  const bereichRows = summary.bereichsVergleich ?? [];
+  if (bereichRows.length > 0) {
+    const byPhase: Record<string, BereichVergleichRow[]> = {};
+    for (const row of bereichRows) {
+      if (!byPhase[row.phaseType]) byPhase[row.phaseType] = [];
+      byPhase[row.phaseType].push(row);
+    }
+
+    const pvIstRows: (string | number | null)[][] = [
+      ['Plan vs. Ist nach Bereich'],
+      [],
+      ['Phase', 'Bereich', 'Plan (€)', 'Ist (€)', 'Abweichung (€)', 'Abweichung (%)'],
+    ];
+
+    for (const phase of PLAN_PHASE_ORDER.filter((p) => byPhase[p])) {
+      const phaseRows = byPhase[phase];
+
+      for (const row of phaseRows) {
+        const planAnzeige = row.plan !== null ? row.plan : row.ist;
+        const istAnzeige  = row.plan !== null ? row.ist  : null;
+        pvIstRows.push([
+          PLAN_PHASE_NAMES[phase],
+          row.bereich ?? 'Ohne Bereich',
+          planAnzeige,
+          istAnzeige,
+          row.delta,
+          row.deltaPercent !== null
+            ? parseFloat(row.deltaPercent.toFixed(1))
+            : null,
+        ]);
+      }
+
+      // Phasengesamt
+      const subIst  = phaseRows.reduce((s, r) => s + r.ist, 0);
+      const subPlan = phaseRows.every((r) => r.plan !== null)
+        ? phaseRows.reduce((s, r) => s + (r.plan ?? 0), 0)
+        : null;
+      const subDelta = subPlan !== null ? subIst - subPlan : null;
+      const subPct   = subPlan !== null && subPlan !== 0
+        ? parseFloat(((subDelta! / subPlan) * 100).toFixed(1))
+        : null;
+      const subPlanAnzeige = subPlan !== null ? subPlan : subIst;
+      const subIstAnzeige  = subPlan !== null ? subIst  : null;
+
+      pvIstRows.push([
+        `Gesamt ${PLAN_PHASE_NAMES[phase]}`,
+        '',
+        subPlanAnzeige,
+        subIstAnzeige,
+        subDelta,
+        subPct,
+      ]);
+      pvIstRows.push([]);
+    }
+
+    const wsPlan = XLSX.utils.aoa_to_sheet(pvIstRows);
+    wsPlan['!cols'] = [
+      { wch: 22 }, { wch: 30 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 16 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsPlan, 'Plan vs. Ist');
   }
 
   XLSX.writeFile(wb, `Kostenkalkulation_${project.projectNumber}_${project.name.replace(/\s+/g, '_')}.xlsx`);
