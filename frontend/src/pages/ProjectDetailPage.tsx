@@ -278,6 +278,66 @@ export default function ProjectDetailPage() {
               </svg>
             ),
           },
+          {
+            label: 'Baunebenkosten',
+            to: `/projects/${id}/module/baunebenkosten`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="10" y="4" width="44" height="56" rx="3"/>
+                <rect x="16" y="14" width="20" height="4" rx="1" fill="white"/>
+                <rect x="16" y="22" width="28" height="4" rx="1" fill="white"/>
+                <rect x="16" y="30" width="24" height="4" rx="1" fill="white"/>
+                <rect x="16" y="38" width="28" height="4" rx="1" fill="white"/>
+                <circle cx="46" cy="48" r="12" fill="white"/>
+                <text x="46" y="53" fontSize="13" fill="currentColor" textAnchor="middle" fontWeight="bold">€</text>
+              </svg>
+            ),
+          },
+          {
+            label: 'Planungskosten',
+            to: `/projects/${id}/module/planungskosten`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="52" width="56" height="6" rx="2"/>
+                <rect x="4" y="4" width="6" height="52" rx="2"/>
+                <rect x="14" y="28" width="8" height="24" rx="2" fill="white" opacity="0.85"/>
+                <rect x="26" y="18" width="8" height="34" rx="2" fill="white" opacity="0.85"/>
+                <rect x="38" y="10" width="8" height="42" rx="2" fill="white" opacity="0.85"/>
+                <rect x="50" y="22" width="8" height="30" rx="2" fill="white" opacity="0.85"/>
+                <polyline points="18,28 30,18 42,10 54,22" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Ausstellung',
+            to: `/projects/${id}/module/ausstellung`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="8" width="56" height="38" rx="3"/>
+                <rect x="10" y="14" width="44" height="26" rx="2" fill="white" opacity="0.2"/>
+                <rect x="14" y="18" width="16" height="18" rx="1" fill="white" opacity="0.7"/>
+                <rect x="34" y="18" width="16" height="8" rx="1" fill="white" opacity="0.7"/>
+                <rect x="34" y="30" width="7" height="6" rx="1" fill="white" opacity="0.7"/>
+                <rect x="45" y="30" width="5" height="6" rx="1" fill="white" opacity="0.7"/>
+                <rect x="22" y="46" width="20" height="5" rx="1" fill="white" opacity="0.6"/>
+                <rect x="10" y="51" width="44" height="5" rx="2" fill="white" opacity="0.4"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Vertrieb',
+            to: `/projects/${id}/module/vertrieb`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <circle cx="20" cy="22" r="10"/>
+                <circle cx="44" cy="22" r="10"/>
+                <path d="M6 54 C6 42 34 42 34 54" fill="currentColor"/>
+                <path d="M30 54 C30 42 58 42 58 54" fill="currentColor"/>
+                <rect x="29" y="19" width="6" height="6" rx="1" fill="white"/>
+                <path d="M28 22 L36 22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            ),
+          },
         ].map((item) => (
           <Link key={item.to} to={item.to}
             className="card hover:shadow-md transition-shadow text-center cursor-pointer group py-4">

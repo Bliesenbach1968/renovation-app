@@ -11,8 +11,11 @@ import type { FinanceSummary } from '../domain/finance/VariableInterestEngine';
 
 const PLAN_PHASE_NAMES: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
+  baunebenkosten: 'Baunebenkosten', planungskosten: 'Planungskosten',
+  ausstellung: 'Ausstellung', vertrieb: 'Vertrieb',
 };
-const PLAN_PHASE_ORDER = ['demolition', 'renovation', 'specialConstruction'];
+const PLAN_PHASE_ORDER = ['demolition', 'renovation', 'specialConstruction', 'baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'];
+const MODULE_PHASES = ['baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const;
 
 function deltaColor(pct: number | null) {
   if (pct === null) return 'text-gray-400';
@@ -113,9 +116,13 @@ function eur(n: number) {
 
 const PHASE_NAMES: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
+  baunebenkosten: 'Baunebenkosten', planungskosten: 'Planungskosten',
+  ausstellung: 'Ausstellung', vertrieb: 'Vertrieb',
 };
 const PHASE_COLORS: Record<string, string> = {
   demolition: 'border-l-red-500', renovation: 'border-l-blue-500', specialConstruction: 'border-l-green-500',
+  baunebenkosten: 'border-l-violet-500', planungskosten: 'border-l-cyan-500',
+  ausstellung: 'border-l-amber-500', vertrieb: 'border-l-teal-500',
 };
 
 function PhaseCard({ phase, data }: { phase: string; data: any }) {
@@ -142,6 +149,7 @@ const LIGHT_BLUE: [number, number, number] = [232, 240, 250];
 const PHASE_ORDER: Array<'demolition' | 'renovation' | 'specialConstruction'> = [
   'demolition', 'renovation', 'specialConstruction',
 ];
+const ALL_PHASE_ORDER = [...PHASE_ORDER, 'baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const;
 
 function downloadPDF(project: Project, summary: ProjectSummary) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -209,12 +217,40 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
     }
   }
 
+  // ── Module (Baunebenkosten etc.) ──────────────────────────────────────────
+  const moduleRows: Array<[string, string]> = (
+    ['baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const
+  )
+    .filter((m) => summary.phases[m]?.subtotal > 0)
+    .map((m) => [PHASE_NAMES[m], eur(summary.phases[m].subtotal)]);
+
+  if (moduleRows.length > 0) {
+    if (y + 10 + moduleRows.length * 8 + 10 > 280) { doc.addPage(); y = 15; }
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      tableWidth: colW,
+      head: [[{ content: 'Weitere Kosten', colSpan: 2, styles: { halign: 'left', fillColor: [80, 50, 120] as [number,number,number], textColor: 255, fontStyle: 'bold', fontSize: 10 } }]],
+      body: moduleRows,
+      columnStyles: { 0: { cellWidth: colW * 0.72 }, 1: { halign: 'right', cellWidth: colW * 0.28 } },
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      bodyStyles: { textColor: [30, 30, 30] },
+    });
+    y = (doc as any).lastAutoTable.finalY + 6;
+  }
+
   // ── Gesamtkosten ──────────────────────────────────────────────────────────
   const t = summary.totals;
+  const moduleSubtotals: Array<[string, string]> = (
+    ['baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const
+  )
+    .filter((m) => summary.phases[m]?.subtotal > 0)
+    .map((m) => [PHASE_NAMES[m], eur(summary.phases[m].subtotal)]);
   const totalRows: Array<[string, string]> = [
-    ['Materialkosten', eur(t.materialCost)],
+    ['Materialkosten (Entkernung + Renovierung + Sonderarbeiten)', eur(t.materialCost)],
     ['Entsorgungskosten', eur(t.disposalCost)],
     ['Arbeitskosten', eur(t.laborCost)],
+    ...moduleSubtotals,
   ];
   if (y + 10 + totalRows.length * 8 + 20 > 280) {
     doc.addPage();
@@ -395,6 +431,19 @@ function downloadExcel(project: Project, summary: ProjectSummary) {
       parseFloat(d.totalHours.toFixed(1)),
       d.positionCount,
     ]);
+  }
+
+  // Module Phasen
+  const moduleKeys = ['baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const;
+  const hasModuleData = moduleKeys.some((m) => (summary.phases[m]?.subtotal ?? 0) > 0);
+  if (hasModuleData) {
+    overviewRows.push([]);
+    overviewRows.push(['Weitere Kosten', '', '', '', '', '', '']);
+    for (const m of moduleKeys) {
+      const d = summary.phases[m];
+      if (!d || d.subtotal === 0) continue;
+      overviewRows.push([PHASE_NAMES[m], d.materialCost, 0, 0, d.subtotal, 0, d.positionCount]);
+    }
   }
 
   const t = summary.totals;
@@ -667,12 +716,39 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* Phase-Karten */}
+      {/* Phase-Karten (Entkernung, Renovierung, Sonderarbeiten) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        {phases && Object.entries(phases).map(([phase, data]) => (
-          <PhaseCard key={phase} phase={phase} data={data} />
+        {phases && PHASE_ORDER.filter((p) => phases[p]).map((phase) => (
+          <PhaseCard key={phase} phase={phase} data={phases[phase]} />
         ))}
       </div>
+
+      {/* Modul-Karten (Baunebenkosten, Planungskosten, Ausstellung, Vertrieb) */}
+      {phases && MODULE_PHASES.some((m) => (phases[m]?.subtotal ?? 0) > 0) && (
+        <div className="mb-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Weitere Kosten</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {MODULE_PHASES.map((m) => {
+              const d = phases[m];
+              if (!d) return null;
+              return (
+                <div key={m} className={`card border-l-4 ${PHASE_COLORS[m]} py-3`}>
+                  <h3 className="font-semibold text-gray-900 text-sm mb-2">{PHASE_NAMES[m]}</h3>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">{d.positionCount} Position{d.positionCount !== 1 ? 'en' : ''}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t border-gray-200 pt-2 mt-1">
+                      <span className="text-xs">Summe</span>
+                      <span className="text-primary-700">{eur(d.subtotal)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Gesamtkosten */}
       {totals && (
@@ -687,6 +763,13 @@ export default function SummaryPage() {
               <div key={item.label} className="bg-white rounded-lg p-3 border border-primary-100">
                 <p className="text-xs text-primary-600 mb-1">{item.label}</p>
                 <p className="font-semibold text-gray-900">{eur(item.val)}</p>
+              </div>
+            ))}
+            {/* Modul-Summen */}
+            {phases && MODULE_PHASES.filter((m) => (phases[m]?.subtotal ?? 0) > 0).map((m) => (
+              <div key={m} className="bg-white rounded-lg p-3 border border-primary-100">
+                <p className="text-xs text-primary-600 mb-1">Summe {PHASE_NAMES[m]}</p>
+                <p className="font-semibold text-gray-900">{eur(phases[m]!.subtotal)}</p>
               </div>
             ))}
             <div className="bg-primary-600 text-white rounded-lg p-3">

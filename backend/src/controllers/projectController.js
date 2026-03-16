@@ -314,7 +314,7 @@ exports.getProjectSummary = async (req, res, next) => {
     ]);
 
     const phaseMap = {};
-    ['demolition', 'renovation', 'specialConstruction'].forEach((p) => {
+    ['demolition', 'renovation', 'specialConstruction', 'baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'].forEach((p) => {
       phaseMap[p] = { materialCost: 0, disposalCost: 0, laborCost: 0, containerCost: 0, geruestCost: 0, kranCost: 0, subtotal: 0, totalHours: 0, positionCount: 0 };
     });
 
@@ -408,7 +408,7 @@ exports.getProjectSummary = async (req, res, next) => {
     }
 
     // Nach Phase + Bereich sortieren
-    const phaseOrder = { demolition: 0, renovation: 1, specialConstruction: 2 };
+    const phaseOrder = { demolition: 0, renovation: 1, specialConstruction: 2, baunebenkosten: 3, planungskosten: 4, ausstellung: 5, vertrieb: 6 };
     const sonderOrder = BEREICHE_SONDERARBEITEN.reduce((m, b, i) => { m[b] = i; return m; }, {});
     bereichsVergleich.sort((a, b) => {
       const pd = (phaseOrder[a.phaseType] ?? 9) - (phaseOrder[b.phaseType] ?? 9);

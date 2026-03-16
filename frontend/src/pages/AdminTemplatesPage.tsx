@@ -9,7 +9,9 @@ import { BEREICHE_ENTKERNUNG_RENOVIERUNG, BEREICHE_HIERARCHIE } from '../data/be
 
 const UNITS: PositionUnit[] = ['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psch', 't'];
 const PHASE_LABELS: Record<string, string> = {
-  demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten', all: 'Alle Phasen',
+  demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
+  baunebenkosten: 'Baunebenkosten', planungskosten: 'Planungskosten',
+  ausstellung: 'Ausstellung', vertrieb: 'Vertrieb', all: 'Alle Phasen',
 };
 
 const THICKNESS_KEYWORDS = [

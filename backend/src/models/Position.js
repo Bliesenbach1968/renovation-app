@@ -6,7 +6,7 @@ const positionSchema = new mongoose.Schema(
     roomId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Room',    required: false, default: null },
     phaseType: {
       type: String,
-      enum: ['demolition', 'renovation', 'specialConstruction'],
+      enum: ['demolition', 'renovation', 'specialConstruction', 'baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'],
       required: true,
     },
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'PositionTemplate' },

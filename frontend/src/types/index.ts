@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'projectLeader' | 'calculator' | 'worker' | 'external';
-export type PhaseType = 'demolition' | 'renovation' | 'specialConstruction';
+export type PhaseType = 'demolition' | 'renovation' | 'specialConstruction' | 'baunebenkosten' | 'planungskosten' | 'ausstellung' | 'vertrieb';
 export type PhaseStatus = 'planned' | 'active' | 'completed';
 export type ProjectStatus = 'planning' | 'active' | 'on-hold' | 'completed' | 'cancelled';
 export type PositionUnit = 'm²' | 'm³' | 'lfm' | 'Stück' | 'Sack' | 'kg' | 'Psch' | 't';

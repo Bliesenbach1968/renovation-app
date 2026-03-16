@@ -9,7 +9,7 @@ const positionTemplateSchema = new mongoose.Schema(
     bereichUnterpunkt:      { type: String, default: null },
     phaseType: {
       type: String,
-      enum: ['demolition', 'renovation', 'specialConstruction', 'all'],
+      enum: ['demolition', 'renovation', 'specialConstruction', 'baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb', 'all'],
       default: 'all',
     },
     unit: {
