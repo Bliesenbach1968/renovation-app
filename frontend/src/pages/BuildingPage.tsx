@@ -270,8 +270,19 @@ function KranPanel({ projectId }: { projectId: string }) {
 
 const SPECIAL_BEREICHE = ['Container & Entsorgung', 'Gerüst', 'Kran'];
 
+const PINNABLE_BEREICHE = [
+  'II. Treppenhaus',
+  'III. Außenanlage',
+  'IV. Elektrik',
+  'VI. Dach',
+  'VII. Fenster',
+  'VIII. Fassade',
+  'IX. Keller',
+  'XI. Pauschale Kosten',
+];
+
 function BereichPositionsPanel({
-  projectId, phase, bereich, unterpunkt, onAdd, onEdit,
+  projectId, phase, bereich, unterpunkt, onAdd, onEdit, onDismiss,
 }: {
   projectId: string;
   phase: string;
@@ -279,6 +290,7 @@ function BereichPositionsPanel({
   unterpunkt?: string;
   onAdd: (template?: PositionTemplate) => void;
   onEdit: (position: Position) => void;
+  onDismiss?: () => void;
 }) {
   const qc = useQueryClient();
 
@@ -309,10 +321,21 @@ function BereichPositionsPanel({
 
   return (
     <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
-      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-        {title}
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
+          {title}
+        </h3>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+            title="Panel ausblenden"
+          >
+            Löschen
+          </button>
+        )}
+      </div>
       <div className="space-y-2">
         <button
           onClick={() => onAdd()}
@@ -518,6 +541,8 @@ export default function BuildingPage() {
   const [showBereichForm, setShowBereichForm] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<PositionTemplate | null>(null);
   const [editBereichPosition, setEditBereichPosition] = useState<Position | null>(null);
+  const [formBereich, setFormBereich] = useState('');
+  const [dismissedPinned, setDismissedPinned] = useState<Set<string>>(new Set());
 
   const qc = useQueryClient();
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
@@ -595,6 +620,22 @@ export default function BuildingPage() {
   }, [selectedPhase, floors, bereichCount]);
 
   const bereiche = usedBereiche;
+
+  // Bereiche die angeheftet werden, sobald Positionen vorhanden sind (neueste zuerst)
+  const pinnedBereiche = useMemo(() => {
+    if (selectedPhase === 'specialConstruction') return [];
+    const positions = allPhasePositions as Position[];
+    const bereichLastId: Record<string, string> = {};
+    positions.forEach(p => {
+      if (!p.roomId && p.bereich && PINNABLE_BEREICHE.includes(p.bereich)) {
+        const current = bereichLastId[p.bereich];
+        if (!current || p._id > current) bereichLastId[p.bereich] = p._id;
+      }
+    });
+    return PINNABLE_BEREICHE
+      .filter(b => bereichLastId[b])
+      .sort((a, b) => bereichLastId[b].localeCompare(bereichLastId[a]));
+  }, [allPhasePositions, selectedPhase]);
 
   const sortedFloors = [...floors]
     .filter(f => selectedPhase === 'specialConstruction'
@@ -730,7 +771,8 @@ export default function BuildingPage() {
             : selectedBereich === 'Gerüst'
             ? <GeruestPanel projectId={projectId!} />
             : <KranPanel projectId={projectId!} />
-          : <BereichPositionsPanel
+          : !pinnedBereiche.includes(selectedBereich)
+          ? <BereichPositionsPanel
               projectId={projectId!}
               phase={selectedPhase}
               bereich={selectedBereich}
@@ -738,14 +780,44 @@ export default function BuildingPage() {
               onAdd={(template) => {
                 setEditBereichPosition(null);
                 setSelectedTemplate(template || null);
+                setFormBereich(selectedBereich);
                 setShowBereichForm(true);
               }}
               onEdit={(pos) => {
                 setEditBereichPosition(pos);
                 setSelectedTemplate(null);
+                setFormBereich(selectedBereich);
                 setShowBereichForm(true);
               }}
             />
+          : null
+      )}
+
+      {/* Angeheftete Bereiche – immer sichtbar sobald Positionen vorhanden */}
+      {pinnedBereiche.filter(b => !dismissedPinned.has(b)).length > 0 && (
+        <div className="space-y-0 mb-2">
+          {pinnedBereiche.filter(b => !dismissedPinned.has(b)).map(b => (
+            <BereichPositionsPanel
+              key={b}
+              projectId={projectId!}
+              phase={selectedPhase}
+              bereich={b}
+              onAdd={(template) => {
+                setEditBereichPosition(null);
+                setSelectedTemplate(template || null);
+                setFormBereich(b);
+                setShowBereichForm(true);
+              }}
+              onEdit={(pos) => {
+                setEditBereichPosition(pos);
+                setSelectedTemplate(null);
+                setFormBereich(b);
+                setShowBereichForm(true);
+              }}
+              onDismiss={() => setDismissedPinned(prev => new Set([...prev, b]))}
+            />
+          ))}
+        </div>
       )}
 
       {/* Etagen */}
@@ -856,14 +928,16 @@ export default function BuildingPage() {
           editPosition={editBereichPosition}
           initialTemplate={selectedTemplate}
           defaultHourlyRate={45}
+          defaultBereich={formBereich || undefined}
           projectFloors={floors}
-          onClose={() => { setShowBereichForm(false); setSelectedTemplate(null); setEditBereichPosition(null); }}
+          onClose={() => { setShowBereichForm(false); setSelectedTemplate(null); setEditBereichPosition(null); setFormBereich(''); }}
           onSuccess={() => {
             qc.invalidateQueries(['positions', 'bereich', projectId]);
             qc.invalidateQueries(['positions']);
             setShowBereichForm(false);
             setSelectedTemplate(null);
             setEditBereichPosition(null);
+            setFormBereich('');
           }}
         />
       )}

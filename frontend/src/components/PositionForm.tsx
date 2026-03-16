@@ -27,7 +27,7 @@ const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten', all: 'Alle Phasen',
 };
 
-export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Betonsanierung', 'Container & Entsorgung', 'Gerüst', 'Kran', 'Pauschal'];
+export const BEREICHE_SONDERARBEITEN = ['Dachausbau', 'Betonsanierung', 'Balkone', 'Container & Entsorgung', 'Gerüst', 'Kran', 'Pauschal'];
 // Legacy-Exporte für Kompatibilität
 export const BEREICH_UNTERPUNKTE: Record<string, string[]> = {};
 
@@ -46,6 +46,7 @@ interface Props {
   editPosition: Position | null;
   initialTemplate?: PositionTemplate | null;
   defaultHourlyRate: number;
+  defaultBereich?: string;
   roomDimensions?: { length?: number; width?: number; height?: number; area?: number; volume?: number };
   projectFloors?: Floor[];
   onClose: () => void;
@@ -70,14 +71,14 @@ function calcPreview(v: Partial<FormValues>) {
 
 export default function PositionForm({
   projectId, roomId, rooms, phaseType, templates, editPosition, initialTemplate,
-  defaultHourlyRate, roomDimensions, projectFloors = [], onClose, onSuccess,
+  defaultHourlyRate, defaultBereich, roomDimensions, projectFloors = [], onClose, onSuccess,
 }: Props) {
   const isEdit = !!editPosition;
   const qc = useQueryClient();
   const [internalRoomId, setInternalRoomId] = useState(roomId || '');
 
   const [searchParams] = useSearchParams();
-  const urlBereich = searchParams.get('bereich') || '';
+  const urlBereich = defaultBereich || searchParams.get('bereich') || '';
   const urlUnterpunkt = searchParams.get('unterpunkt') || '';
 
   // Wenn Raum aus Dropdown gewählt, dessen Maße bevorzugen
