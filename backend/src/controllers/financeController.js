@@ -76,10 +76,13 @@ exports.saveParams = async (req, res, next) => {
   try {
     const { projectId } = req.params;
 
+    // Schreibgeschützte Felder aus dem Body entfernen, um MongoDB-Konflikte zu vermeiden
+    const { _id, createdBy, updatedBy, projectId: _pid, createdAt, updatedAt, __v, ...safeBody } = req.body;
+
     const fp = await FinanceParams.findOneAndUpdate(
       { projectId },
       {
-        ...req.body,
+        ...safeBody,
         projectId,
         updatedBy: req.user._id,
         $setOnInsert: { createdBy: req.user._id },

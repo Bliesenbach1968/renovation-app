@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import type ExcelJSType from 'exceljs';
 import { getProject, getProjectSummary, getRooms, frierePlanwerteEin, loeschePlanwerte } from '../api/projects';
 import { getFinanceSummary } from '../api/finance';
 import type { ProjectSummary, Project, BereichVergleichRow, PhaseType } from '../types';
@@ -402,95 +402,246 @@ function downloadPDF(project: Project, summary: ProjectSummary) {
   doc.save(`Kostenkalkulation_${project.projectNumber}_${project.name.replace(/\s+/g, '_')}.pdf`);
 }
 
-// ─── Excel-Download ───────────────────────────────────────────────────────────
+// ─── Excel-Download (modern styled via ExcelJS) ────────────────────────────────
 
-function downloadExcel(project: Project, summary: ProjectSummary) {
+const XLSX_PHASE_COLORS: Record<string, string> = {
+  demolition:          'C0392B',
+  renovation:          '2563EB',
+  specialConstruction: '16A34A',
+  baunebenkosten:      '7C3AED',
+  planungskosten:      '0891B2',
+  ausstellung:         'D97706',
+  vertrieb:            '0F766E',
+};
+
+async function downloadExcel(project: Project, summary: ProjectSummary) {
+  // Dynamic import so bundle stays small when not needed
+  const ExcelJS = ((await import('exceljs')) as unknown as { default: typeof ExcelJSType }).default;
   const now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const wb = XLSX.utils.book_new();
 
-  // ── Übersichtsblatt ────────────────────────────────────────────────────────
-  const overviewRows: (string | number)[][] = [
-    ['Kostenkalkulation'],
-    [project.name],
-    [project.projectNumber],
-    [`${project.address.street}, ${project.address.zipCode} ${project.address.city}`],
-    [`Erstellt am ${now}`],
-    [],
-    ['Phase', 'Materialkosten (€)', 'Entsorgungskosten (€)', 'Arbeitskosten (€)', 'Phasensumme (€)', 'Arbeitsstunden', 'Positionen'],
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Sanierungssoftware';
+  wb.created = new Date();
+
+  // ─── Colour palette ─────────────────────────────────────────────────────
+  const DARK_BG  = 'FF1E3A5F';
+  const ALT_ROW  = 'FFF8FAFC';
+  const TOTAL_BG = 'FFE8F0FA';
+  const MOD_BG   = 'FF4C1D95';
+  const EUR_FMT  = '#,##0.00 "€"';
+  const H_FMT    = '#,##0.0';
+
+  // ─── Style helpers ───────────────────────────────────────────────────────
+  type ECell = ExcelJSType.Cell;
+
+  function titleCell(cell: ECell, text: string, size: number, sub = false) {
+    cell.value = text;
+    cell.style = {
+      font: { bold: !sub, size, color: { argb: sub ? 'FFB0C4DE' : 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } },
+      alignment: { vertical: 'middle', horizontal: 'left', indent: 1 },
+    };
+  }
+
+  function headerCell(cell: ECell, text: string, align: 'left' | 'right' | 'center' = 'left', bg = DARK_BG) {
+    cell.value = text;
+    cell.style = {
+      font: { bold: true, size: 9, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } },
+      alignment: { vertical: 'middle', horizontal: align, indent: align === 'left' ? 1 : 0 },
+      border: { bottom: { style: 'thin', color: { argb: 'FF1E3A5F' } } },
+    };
+  }
+
+  function dataCell(cell: ECell, value: string | number | null, alt: boolean, align: 'left' | 'right' = 'right', fmt?: string, bold = false, colorArgb?: string) {
+    cell.value = value as ExcelJSType.CellValue;
+    const style: Partial<ExcelJSType.Style> = {
+      font: { size: 9, bold, color: colorArgb ? { argb: colorArgb } : undefined },
+      fill: alt
+        ? { type: 'pattern', pattern: 'solid', fgColor: { argb: ALT_ROW } }
+        : { type: 'pattern', pattern: 'none' },
+      alignment: { horizontal: align, vertical: 'middle', indent: align === 'left' ? 1 : 0 },
+      border: { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } },
+    };
+    if (fmt) style.numFmt = fmt;
+    cell.style = style;
+  }
+
+  function totalCell(cell: ECell, value: string | number | null, fmt?: string, size = 9) {
+    cell.value = value as ExcelJSType.CellValue;
+    cell.style = {
+      font: { bold: true, size, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } },
+      alignment: { horizontal: typeof value === 'number' ? 'right' : 'left', vertical: 'middle', indent: typeof value === 'string' ? 1 : 0 },
+      numFmt: fmt,
+    };
+  }
+
+  function subtotalCell(cell: ECell, value: string | number | null, fmt?: string) {
+    cell.value = value as ExcelJSType.CellValue;
+    cell.style = {
+      font: { bold: true, size: 9 },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } },
+      alignment: { horizontal: typeof value === 'number' ? 'right' : 'left', vertical: 'middle', indent: typeof value === 'string' ? 1 : 0 },
+      border: { top: { style: 'thin', color: { argb: 'FFCBD5E1' } }, bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } },
+      numFmt: fmt,
+    };
+  }
+
+  // ─── SHEET 1: Übersicht ──────────────────────────────────────────────────
+  const wsO = wb.addWorksheet('Übersicht');
+  wsO.columns = [
+    { width: 28 }, { width: 20 }, { width: 22 }, { width: 18 }, { width: 18 }, { width: 15 }, { width: 12 },
   ];
 
+  // Title rows
+  const r1 = wsO.addRow(['']); r1.height = 30;
+  titleCell(r1.getCell(1), 'Kostenkalkulation', 15);
+  wsO.mergeCells(r1.number, 1, r1.number, 7);
+  // fill remaining merged cells
+  for (let c = 2; c <= 7; c++) r1.getCell(c).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } } };
+
+  const r2 = wsO.addRow(['']); r2.height = 20;
+  titleCell(r2.getCell(1), project.name, 11);
+  wsO.mergeCells(r2.number, 1, r2.number, 7);
+  for (let c = 2; c <= 7; c++) r2.getCell(c).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } } };
+
+  const r3 = wsO.addRow(['']); r3.height = 16;
+  titleCell(r3.getCell(1), `${project.projectNumber}  ·  ${project.address.street}, ${project.address.zipCode} ${project.address.city}  ·  Erstellt am ${now}`, 8, true);
+  wsO.mergeCells(r3.number, 1, r3.number, 7);
+  for (let c = 2; c <= 7; c++) r3.getCell(c).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } } };
+
+  wsO.addRow([]).height = 6; // thin spacer
+
+  // Column headers
+  const rH = wsO.addRow([]); rH.height = 22;
+  const colLabels = ['Phase', 'Materialkosten (€)', 'Entsorgungskosten (€)', 'Arbeitskosten (€)', 'Phasensumme (€)', 'Arbeitsstunden', 'Positionen'];
+  const colAligns: Array<'left' | 'right'> = ['left', 'right', 'right', 'right', 'right', 'right', 'right'];
+  colLabels.forEach((lbl, i) => headerCell(rH.getCell(i + 1), lbl, colAligns[i]));
+  wsO.views = [{ state: 'frozen', ySplit: rH.number }];
+
+  // Phase rows
+  let altIdx = 0;
   for (const phase of PHASE_ORDER) {
     const d = summary.phases[phase];
     if (!d) continue;
-    overviewRows.push([
-      PHASE_NAMES[phase],
-      d.materialCost,
-      d.disposalCost,
-      d.laborCost,
-      d.subtotal,
-      parseFloat(d.totalHours.toFixed(1)),
-      d.positionCount,
-    ]);
+    const alt = altIdx++ % 2 === 1;
+    const row = wsO.addRow([]); row.height = 18;
+    const phCol = `FF${XLSX_PHASE_COLORS[phase] ?? '64748B'}`;
+    // Phase name with colored dot indicator
+    const nameCell = row.getCell(1);
+    nameCell.value = `● ${PHASE_NAMES[phase]}`;
+    nameCell.style = {
+      font: { size: 9, bold: true, color: { argb: phCol } },
+      fill: alt ? { type: 'pattern', pattern: 'solid', fgColor: { argb: ALT_ROW } } : { type: 'pattern', pattern: 'none' },
+      alignment: { vertical: 'middle', indent: 1 },
+      border: { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } },
+    };
+    dataCell(row.getCell(2), d.materialCost,  alt, 'right', EUR_FMT);
+    dataCell(row.getCell(3), d.disposalCost,  alt, 'right', EUR_FMT);
+    dataCell(row.getCell(4), d.laborCost,     alt, 'right', EUR_FMT);
+    dataCell(row.getCell(5), d.subtotal,      alt, 'right', EUR_FMT, true);
+    dataCell(row.getCell(6), parseFloat(d.totalHours.toFixed(1)), alt, 'right', H_FMT);
+    dataCell(row.getCell(7), d.positionCount, alt, 'right', '0');
   }
 
-  // Module Phasen
+  // Module section
   const moduleKeys = ['baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const;
   const hasModuleData = moduleKeys.some((m) => (summary.phases[m]?.subtotal ?? 0) > 0);
   if (hasModuleData) {
-    overviewRows.push([]);
-    overviewRows.push(['Weitere Kosten', '', '', '', '', '', '']);
+    wsO.addRow([]).height = 6;
+    const mH = wsO.addRow([]); mH.height = 20;
+    mH.getCell(1).value = 'Weitere Kosten';
+    mH.getCell(1).style = {
+      font: { bold: true, size: 9, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: MOD_BG } },
+      alignment: { vertical: 'middle', indent: 1 },
+    };
+    wsO.mergeCells(mH.number, 1, mH.number, 7);
+    for (let c = 2; c <= 7; c++) mH.getCell(c).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: MOD_BG } } };
+
     for (const m of moduleKeys) {
       const d = summary.phases[m];
       if (!d || d.subtotal === 0) continue;
-      overviewRows.push([PHASE_NAMES[m], d.materialCost, 0, 0, d.subtotal, 0, d.positionCount]);
+      const row = wsO.addRow([]); row.height = 18;
+      dataCell(row.getCell(1), PHASE_NAMES[m], false, 'left');
+      row.getCell(1).style.font = { size: 9, color: { argb: `FF${XLSX_PHASE_COLORS[m]}` } };
+      // fill blanks 2-4, 6-7
+      [2,3,4,6,7].forEach(c => dataCell(row.getCell(c), null, false, 'right'));
+      dataCell(row.getCell(5), d.subtotal, false, 'right', EUR_FMT, true);
+      dataCell(row.getCell(7), d.positionCount, false, 'right', '0');
     }
   }
 
+  // Grand total
+  wsO.addRow([]).height = 6;
   const t = summary.totals;
-  overviewRows.push([]);
-  overviewRows.push([
-    'GESAMTSUMME',
-    t.materialCost,
-    t.disposalCost,
-    t.laborCost,
-    t.grandTotal,
-    parseFloat(t.totalHours.toFixed(0)),
-    '',
-  ]);
+  const rT = wsO.addRow([]); rT.height = 26;
+  totalCell(rT.getCell(1), 'GESAMTSUMME', undefined, 11);
+  totalCell(rT.getCell(2), t.materialCost, EUR_FMT);
+  totalCell(rT.getCell(3), t.disposalCost, EUR_FMT);
+  totalCell(rT.getCell(4), t.laborCost,    EUR_FMT);
+  totalCell(rT.getCell(5), t.grandTotal,   EUR_FMT, 12);
+  totalCell(rT.getCell(6), parseFloat(t.totalHours.toFixed(0)), H_FMT);
+  totalCell(rT.getCell(7), null);
 
-  const wsOverview = XLSX.utils.aoa_to_sheet(overviewRows);
-
-  // Spaltenbreiten
-  wsOverview['!cols'] = [
-    { wch: 22 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 12 },
-  ];
-
-  XLSX.utils.book_append_sheet(wb, wsOverview, 'Übersicht');
-
-  // ── Je Phase ein eigenes Blatt ────────────────────────────────────────────
+  // ─── SHEET per phase ─────────────────────────────────────────────────────
   for (const phase of PHASE_ORDER) {
     const d = summary.phases[phase];
     if (!d) continue;
+    const phColor = `FF${XLSX_PHASE_COLORS[phase] ?? '1E3A5F'}`;
+    const ws = wb.addWorksheet(PHASE_NAMES[phase]);
+    ws.columns = [{ width: 28 }, { width: 20 }];
 
-    const rows: (string | number)[][] = [
-      [PHASE_NAMES[phase]],
-      [],
-      ['Kostenart', 'Betrag (€)'],
-      ['Materialkosten', d.materialCost],
+    // Title
+    const pt = ws.addRow([]); pt.height = 26;
+    pt.getCell(1).value = PHASE_NAMES[phase];
+    pt.getCell(1).style = {
+      font: { bold: true, size: 13, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: phColor } },
+      alignment: { vertical: 'middle', indent: 1 },
+    };
+    ws.mergeCells(pt.number, 1, pt.number, 2);
+    pt.getCell(2).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: phColor } } };
+
+    ws.addRow([]).height = 6;
+
+    // Header
+    const ph = ws.addRow([]); ph.height = 20;
+    headerCell(ph.getCell(1), 'Kostenart', 'left', phColor);
+    headerCell(ph.getCell(2), 'Betrag (€)', 'right', phColor);
+
+    const costData = [
+      ['Materialkosten',    d.materialCost],
       ['Entsorgungskosten', d.disposalCost],
-      ['Arbeitskosten', d.laborCost],
-      [],
-      ['Phasensumme', d.subtotal],
+      ['Arbeitskosten',     d.laborCost],
+    ] as [string, number][];
+    costData.forEach(([label, val], i) => {
+      const row = ws.addRow([]); row.height = 18;
+      dataCell(row.getCell(1), label, i % 2 === 1, 'left');
+      dataCell(row.getCell(2), val,   i % 2 === 1, 'right', EUR_FMT);
+    });
+
+    ws.addRow([]).height = 4;
+    const rs = ws.addRow([]); rs.height = 22;
+    subtotalCell(rs.getCell(1), `Phasensumme ${PHASE_NAMES[phase]}`);
+    subtotalCell(rs.getCell(2), d.subtotal, EUR_FMT);
+
+    ws.addRow([]).height = 6;
+    const metaRows = [
       ['Arbeitsstunden', parseFloat(d.totalHours.toFixed(1))],
       ['Positionen', d.positionCount],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 24 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, ws, PHASE_NAMES[phase]);
+    ] as [string, number][];
+    metaRows.forEach(([label, val]) => {
+      const row = ws.addRow([]); row.height = 16;
+      row.getCell(1).value = label;
+      row.getCell(1).style = { font: { size: 8, color: { argb: 'FF64748B' } }, alignment: { vertical: 'middle', indent: 1 } };
+      row.getCell(2).value = val;
+      row.getCell(2).style = { font: { size: 8, color: { argb: 'FF64748B' } }, alignment: { horizontal: 'right', vertical: 'middle' }, numFmt: '0.0' };
+    });
   }
 
-  // ── Plan vs. Ist nach Bereich ────────────────────────────────────────────
+  // ─── SHEET: Plan vs. Ist ─────────────────────────────────────────────────
   const bereichRows = summary.bereichsVergleich ?? [];
   if (bereichRows.length > 0) {
     const byPhase: Record<string, BereichVergleichRow[]> = {};
@@ -499,61 +650,97 @@ function downloadExcel(project: Project, summary: ProjectSummary) {
       byPhase[row.phaseType].push(row);
     }
 
-    const pvIstRows: (string | number | null)[][] = [
-      ['Plan vs. Ist nach Bereich'],
-      [],
-      ['Phase', 'Bereich', 'Plan (€)', 'Ist (€)', 'Abweichung (€)', 'Abweichung (%)'],
+    const wsPV = wb.addWorksheet('Plan vs. Ist');
+    wsPV.columns = [
+      { width: 24 }, { width: 30 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 14 },
     ];
+
+    // Title
+    const pvT = wsPV.addRow([]); pvT.height = 26;
+    pvT.getCell(1).value = 'Plan vs. Ist nach Bereich';
+    pvT.getCell(1).style = {
+      font: { bold: true, size: 13, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } },
+      alignment: { vertical: 'middle', indent: 1 },
+    };
+    wsPV.mergeCells(pvT.number, 1, pvT.number, 6);
+    for (let c = 2; c <= 6; c++) pvT.getCell(c).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } } };
+
+    wsPV.addRow([]).height = 6;
+
+    // Column headers
+    const pvH = wsPV.addRow([]); pvH.height = 22;
+    ['Phase', 'Bereich', 'Plan (€)', 'Ist (€)', 'Abweichung (€)', 'Abw. (%)'].forEach((lbl, i) => {
+      headerCell(pvH.getCell(i + 1), lbl, i < 2 ? 'left' : 'right');
+    });
+    wsPV.views = [{ state: 'frozen', ySplit: pvH.number }];
 
     for (const phase of PLAN_PHASE_ORDER.filter((p) => byPhase[p])) {
-      const phaseRows = byPhase[phase];
+      const phRows = byPhase[phase];
+      const phColor = `FF${XLSX_PHASE_COLORS[phase] ?? '334155'}`;
 
-      for (const row of phaseRows) {
+      // Phase section header
+      const phH = wsPV.addRow([]); phH.height = 20;
+      phH.getCell(1).value = PLAN_PHASE_NAMES[phase];
+      phH.getCell(1).style = {
+        font: { bold: true, size: 9, color: { argb: 'FFFFFFFF' } },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: phColor } },
+        alignment: { vertical: 'middle', indent: 1 },
+      };
+      wsPV.mergeCells(phH.number, 1, phH.number, 6);
+      for (let c = 2; c <= 6; c++) phH.getCell(c).style = { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: phColor } } };
+
+      // Data rows
+      phRows.forEach((row, i) => {
         const planAnzeige = row.plan !== null ? row.plan : row.ist;
         const istAnzeige  = row.plan !== null ? row.ist  : null;
-        pvIstRows.push([
-          PLAN_PHASE_NAMES[phase],
-          row.bereich ?? 'Ohne Bereich',
-          planAnzeige,
-          istAnzeige,
-          row.delta,
-          row.deltaPercent !== null
-            ? parseFloat(row.deltaPercent.toFixed(1))
-            : null,
-        ]);
-      }
+        const pct = row.deltaPercent;
+        const alt = i % 2 === 1;
 
-      // Phasengesamt
-      const subIst  = phaseRows.reduce((s, r) => s + r.ist, 0);
-      const subPlan = phaseRows.every((r) => r.plan !== null)
-        ? phaseRows.reduce((s, r) => s + (r.plan ?? 0), 0)
-        : null;
+        let deltaArgb: string | undefined;
+        if (pct !== null) {
+          deltaArgb = Math.abs(pct) <= 2 ? 'FF16A34A' : Math.abs(pct) < 5 ? 'FFD97706' : 'FFDC2626';
+        }
+
+        const dr = wsPV.addRow([]); dr.height = 18;
+        dataCell(dr.getCell(1), '',                                  alt, 'left');
+        dataCell(dr.getCell(2), row.bereich ?? 'Ohne Bereich',       alt, 'left');
+        dataCell(dr.getCell(3), planAnzeige,                         alt, 'right', EUR_FMT);
+        dataCell(dr.getCell(4), istAnzeige,                          alt, 'right', EUR_FMT);
+        dataCell(dr.getCell(5), row.delta,                           alt, 'right', EUR_FMT, false, deltaArgb);
+        dataCell(dr.getCell(6),
+          pct !== null ? parseFloat(pct.toFixed(1)) : null,          alt, 'right', '+0.0;-0.0;0.0"%"', false, deltaArgb);
+      });
+
+      // Phase subtotal
+      const subIst  = phRows.reduce((s, r) => s + r.ist, 0);
+      const subPlan = phRows.every((r) => r.plan !== null) ? phRows.reduce((s, r) => s + (r.plan ?? 0), 0) : null;
       const subDelta = subPlan !== null ? subIst - subPlan : null;
-      const subPct   = subPlan !== null && subPlan !== 0
-        ? parseFloat(((subDelta! / subPlan) * 100).toFixed(1))
-        : null;
-      const subPlanAnzeige = subPlan !== null ? subPlan : subIst;
-      const subIstAnzeige  = subPlan !== null ? subIst  : null;
+      const subPct   = subPlan !== null && subPlan !== 0 ? parseFloat(((subDelta! / subPlan) * 100).toFixed(1)) : null;
 
-      pvIstRows.push([
-        `Gesamt ${PLAN_PHASE_NAMES[phase]}`,
-        '',
-        subPlanAnzeige,
-        subIstAnzeige,
-        subDelta,
-        subPct,
-      ]);
-      pvIstRows.push([]);
+      const sr = wsPV.addRow([]); sr.height = 20;
+      subtotalCell(sr.getCell(1), 'Gesamt');
+      subtotalCell(sr.getCell(2), PLAN_PHASE_NAMES[phase]);
+      subtotalCell(sr.getCell(3), subPlan !== null ? subPlan : subIst, EUR_FMT);
+      subtotalCell(sr.getCell(4), subPlan !== null ? subIst : null,    EUR_FMT);
+      subtotalCell(sr.getCell(5), subDelta,                            EUR_FMT);
+      subtotalCell(sr.getCell(6), subPct !== null ? subPct : null,     '+0.0;-0.0;0.0"%"');
+
+      wsPV.addRow([]).height = 4;
     }
-
-    const wsPlan = XLSX.utils.aoa_to_sheet(pvIstRows);
-    wsPlan['!cols'] = [
-      { wch: 22 }, { wch: 30 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 16 },
-    ];
-    XLSX.utils.book_append_sheet(wb, wsPlan, 'Plan vs. Ist');
   }
 
-  XLSX.writeFile(wb, `Kostenkalkulation_${project.projectNumber}_${project.name.replace(/\s+/g, '_')}.xlsx`);
+  // ─── Write & trigger download ─────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Kostenkalkulation_${project.projectNumber}_${project.name.replace(/\s+/g, '_')}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ─── Finanzierungs-KPI-Karte ──────────────────────────────────────────────────
@@ -694,7 +881,7 @@ export default function SummaryPage() {
             DATEV
           </button>
           <button
-            onClick={() => project && summary && downloadExcel(project, summary)}
+            onClick={() => project && summary && void downloadExcel(project, summary)}
             disabled={!summary || !project}
             className="btn btn-sm btn-success"
           >

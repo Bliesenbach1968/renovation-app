@@ -49,6 +49,7 @@ interface Props {
   defaultBereich?: string;
   roomDimensions?: { length?: number; width?: number; height?: number; area?: number; volume?: number };
   projectFloors?: Floor[];
+  projectUnits?: { _id: string; name: string; number?: string; floorId: string | { _id: string } }[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -71,7 +72,7 @@ function calcPreview(v: Partial<FormValues>) {
 
 export default function PositionForm({
   projectId, roomId, rooms, phaseType, templates, editPosition, initialTemplate,
-  defaultHourlyRate, defaultBereich, roomDimensions, projectFloors = [], onClose, onSuccess,
+  defaultHourlyRate, defaultBereich, roomDimensions, projectFloors = [], projectUnits = [], onClose, onSuccess,
 }: Props) {
   const isEdit = !!editPosition;
   const qc = useQueryClient();
@@ -315,11 +316,18 @@ export default function PositionForm({
                 <label className="label">Raum (optional)</label>
                 <select value={internalRoomId} onChange={(e) => setInternalRoomId(e.target.value)} className="input">
                   <option value="">– Raum auswählen –</option>
-                  {rooms.map(r => (
-                    <option key={r._id} value={r._id}>
-                      {r.name}{r.dimensions?.area ? ` (${r.dimensions.area} m²)` : ''}
-                    </option>
-                  ))}
+                  {rooms.map(r => {
+                    const unit = projectUnits.find(u => u._id === (typeof r.unitId === 'string' ? r.unitId : (r.unitId as any)?._id));
+                    const floorId = unit ? (typeof unit.floorId === 'string' ? unit.floorId : (unit.floorId as any)?._id) : (typeof r.floorId === 'string' ? r.floorId : (r.floorId as any)?._id);
+                    const floor = projectFloors.find(f => f._id === floorId);
+                    const unitLabel = unit ? `${unit.number ? unit.number + ' ' : ''}${unit.name}`.trim() : '';
+                    const suffix = [unitLabel, floor?.name].filter(Boolean).join(' · ');
+                    return (
+                      <option key={r._id} value={r._id}>
+                        {r.name}{r.dimensions?.area ? ` (${r.dimensions.area} m²)` : ''}{suffix ? ` – ${suffix}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {internalRoomId && (floorArea != null || wallArea != null) && (
                   <div className="flex gap-2 mt-1.5">

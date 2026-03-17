@@ -37,6 +37,8 @@ const CONTAINER_TYPES = ['Bauschutt', 'GemischterAbfall', 'Sondermuell', 'Holz',
 const GERUEST_TYPES = ['Fassadengerüst', 'Innengerüst', 'Hängegerüst', 'Schutzgerüst', 'Traggerüst', 'Raumgerüst', 'Arbeitsgerüst', 'Sonstiges'];
 const KRAN_TYPES = ['Turmdrehkran', 'Mobilkran', 'Autokran', 'Raupenkran', 'Sonstiges'];
 function eur(n: number) { return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }); }
+/** Entfernt führende römische Ziffern für die Anzeige, z.B. "XI. Pauschale Kosten" → "Pauschale Kosten" */
+function bereichLabel(b: string): string { return b.replace(/^[IVXLCDM]+\.\s*/i, ''); }
 
 function ContainerPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
@@ -319,7 +321,7 @@ function BereichPositionsPanel({
     !unterpunkt || !p.bereichUnterpunkt || p.bereichUnterpunkt === unterpunkt
   );
 
-  const title = unterpunkt ? `${bereich} · ${unterpunkt}` : bereich;
+  const title = unterpunkt ? `${bereichLabel(bereich)} · ${unterpunkt}` : bereichLabel(bereich);
 
   return (
     <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
@@ -528,7 +530,7 @@ function PauschalePanel({
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-          XI. Pauschale Kosten
+          Pauschale Kosten
         </h3>
         {onDismiss && (
           <button onClick={onDismiss} className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 transition-colors">Löschen</button>
@@ -1122,7 +1124,7 @@ export default function BuildingPage() {
                   : 'bg-white text-gray-600 border-gray-300 hover:border-primary-400'
               }`}
             >
-              {b}
+              {bereichLabel(b)}
               {count > 0 && !isActive && (
                 <span className="text-[10px] font-semibold bg-primary-500 text-white rounded-full px-1.5 py-0 leading-4 min-w-[18px] text-center">
                   {count}
@@ -1144,7 +1146,7 @@ export default function BuildingPage() {
                 {allBereicheForPhase.map(b => (
                   <button key={b} onClick={() => { setBereich(b); setShowBereichPicker(false); }}
                     className="block w-full text-left text-sm px-3 py-1.5 rounded-lg hover:bg-primary-50 hover:text-primary-700 transition-colors">
-                    {b}
+                    {bereichLabel(b)}
                   </button>
                 ))}
               </div>
@@ -1433,6 +1435,7 @@ export default function BuildingPage() {
           defaultHourlyRate={45}
           defaultBereich={formBereich || undefined}
           projectFloors={floors}
+          projectUnits={units as Unit[]}
           onClose={() => { setShowBereichForm(false); setSelectedTemplate(null); setEditBereichPosition(null); setFormBereich(''); }}
           onSuccess={() => {
             qc.invalidateQueries(['positions', 'bereich', projectId]);
