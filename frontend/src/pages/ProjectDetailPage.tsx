@@ -215,8 +215,24 @@ export default function ProjectDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           {
-            label: 'Gebäude & Räume',
-            to: `/projects/${id}/building`,
+            label: 'Grundstück & Finanzierung',
+            to: `/projects/${id}/finance`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="8" width="56" height="48" rx="4"/>
+                <rect x="4" y="8" width="56" height="12" rx="4" fill="white" opacity="0.2"/>
+                <rect x="10" y="28" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="10" y="38" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="28" y="28" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="28" y="38" width="14" height="6"  rx="2" fill="white"/>
+                <rect x="46" y="28" width="10" height="16" rx="2" fill="white"/>
+                <text x="32" y="18" fontSize="10" fill="white" textAnchor="middle" fontWeight="bold">€</text>
+              </svg>
+            ),
+          },
+          {
+            label: 'Gebäude & Renovierung',
+            to: `/projects/${id}/building?phase=renovation`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
                 <rect x="10" y="3" width="44" height="55"/>
@@ -232,49 +248,31 @@ export default function ProjectDetailPage() {
             ),
           },
           {
-            label: 'Kostenkalkulation',
-            to: `/projects/${id}/summary`,
+            label: 'Abrisskosten',
+            to: `/projects/${id}/abrisskosten`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
-                <rect x="4" y="4" width="56" height="56" rx="2"/>
-                <rect x="4"  y="16" width="56" height="3" fill="white"/>
-                <rect x="4"  y="31" width="56" height="3" fill="white"/>
-                <rect x="4"  y="46" width="56" height="3" fill="white"/>
-                <rect x="22" y="4"  width="3"  height="56" fill="white"/>
-                <rect x="42" y="4"  width="3"  height="56" fill="white"/>
+                <rect x="8" y="28" width="48" height="30" rx="2"/>
+                <polygon points="4,30 32,4 60,30"/>
+                <rect x="22" y="38" width="8" height="20" fill="white" rx="1"/>
+                <rect x="34" y="38" width="8" height="20" fill="white" rx="1"/>
+                <line x1="8" y1="28" x2="56" y2="28" stroke="white" strokeWidth="2"/>
               </svg>
             ),
           },
           {
-            label: 'Zeitplan',
-            to: `/projects/${id}/timeline`,
+            label: 'Baukosten',
+            to: `/projects/${id}/baukosten`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
-                <rect x="4" y="12" width="56" height="49" rx="2"/>
-                <rect x="17" y="4"  width="8" height="18" rx="4"/>
-                <rect x="39" y="4"  width="8" height="18" rx="4"/>
-                <rect x="19" y="6"  width="4" height="10" rx="2" fill="white"/>
-                <rect x="41" y="6"  width="4" height="10" rx="2" fill="white"/>
-                <rect x="4"  y="26" width="56" height="3"  fill="white"/>
-                <rect x="10" y="33" width="20" height="7"  fill="white" rx="1"/>
-                <rect x="32" y="33" width="18" height="7"  fill="white" rx="1"/>
-                <rect x="10" y="45" width="38" height="7"  fill="white" rx="1"/>
-              </svg>
-            ),
-          },
-          {
-            label: 'Finanzierung',
-            to: `/projects/${id}/finance`,
-            icon: (
-              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
-                <rect x="4" y="8" width="56" height="48" rx="4"/>
-                <rect x="4" y="8" width="56" height="12" rx="4" fill="white" opacity="0.2"/>
-                <rect x="10" y="28" width="14" height="6"  rx="2" fill="white"/>
-                <rect x="10" y="38" width="14" height="6"  rx="2" fill="white"/>
-                <rect x="28" y="28" width="14" height="6"  rx="2" fill="white"/>
-                <rect x="28" y="38" width="14" height="6"  rx="2" fill="white"/>
-                <rect x="46" y="28" width="10" height="16" rx="2" fill="white"/>
-                <text x="32" y="18" fontSize="10" fill="white" textAnchor="middle" fontWeight="bold">€</text>
+                <rect x="4" y="32" width="56" height="26" rx="2"/>
+                <rect x="14" y="16" width="36" height="18" rx="1"/>
+                <rect x="24" y="6" width="16" height="12" rx="1"/>
+                <rect x="10" y="38" width="10" height="12" fill="white" rx="1"/>
+                <rect x="27" y="38" width="10" height="12" fill="white" rx="1"/>
+                <rect x="44" y="38" width="10" height="12" fill="white" rx="1"/>
+                <rect x="20" y="20" width="8" height="8" fill="white" rx="1"/>
+                <rect x="36" y="20" width="8" height="8" fill="white" rx="1"/>
               </svg>
             ),
           },
@@ -309,7 +307,7 @@ export default function ProjectDetailPage() {
             ),
           },
           {
-            label: 'Ausstellung',
+            label: 'Ausstattung',
             to: `/projects/${id}/module/ausstellung`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
@@ -335,6 +333,37 @@ export default function ProjectDetailPage() {
                 <path d="M30 54 C30 42 58 42 58 54" fill="currentColor"/>
                 <rect x="29" y="19" width="6" height="6" rx="1" fill="white"/>
                 <path d="M28 22 L36 22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Kostenkalkulation',
+            to: `/projects/${id}/summary`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="4" width="56" height="56" rx="2"/>
+                <rect x="4"  y="16" width="56" height="3" fill="white"/>
+                <rect x="4"  y="31" width="56" height="3" fill="white"/>
+                <rect x="4"  y="46" width="56" height="3" fill="white"/>
+                <rect x="22" y="4"  width="3"  height="56" fill="white"/>
+                <rect x="42" y="4"  width="3"  height="56" fill="white"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Zeitplan',
+            to: `/projects/${id}/timeline`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="12" width="56" height="49" rx="2"/>
+                <rect x="17" y="4"  width="8" height="18" rx="4"/>
+                <rect x="39" y="4"  width="8" height="18" rx="4"/>
+                <rect x="19" y="6"  width="4" height="10" rx="2" fill="white"/>
+                <rect x="41" y="6"  width="4" height="10" rx="2" fill="white"/>
+                <rect x="4"  y="26" width="56" height="3"  fill="white"/>
+                <rect x="10" y="33" width="20" height="7"  fill="white" rx="1"/>
+                <rect x="32" y="33" width="18" height="7"  fill="white" rx="1"/>
+                <rect x="10" y="45" width="38" height="7"  fill="white" rx="1"/>
               </svg>
             ),
           },

@@ -33,6 +33,7 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
   const [feesPct,            setFeesPct]            = useState(initial?.acquisitionFeesPct  ?? 9);
   const [feesFixed,          setFeesFixed]          = useState(initial?.acquisitionFeesFixed ?? '');
   const [feesMode,           setFeesMode]           = useState<'pct' | 'fixed'>('pct');
+  const [feesLump,           setFeesLump]           = useState<number | ''>(initial?.acquisitionFeesLump ?? '');
 
   const [rateModelType,      setRateModelType]      = useState<'staffel' | 'indexMargin'>(initial?.rateModelType || 'staffel');
   const [staffelRows,        setStaffelRows]        = useState<StaffelEntryDto[]>(
@@ -64,6 +65,7 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
     if (initial.purchasePrice)     setPurchasePrice(initial.purchasePrice);
     if (initial.acquisitionFeesPct != null) { setFeesPct(initial.acquisitionFeesPct!); setFeesMode('pct'); }
     if (initial.acquisitionFeesFixed != null) { setFeesFixed(initial.acquisitionFeesFixed!); setFeesMode('fixed'); }
+    if (initial.acquisitionFeesLump != null) setFeesLump(initial.acquisitionFeesLump!);
     if (initial.rateModelType)     setRateModelType(initial.rateModelType);
     if (initial.staffelSchedule?.length)    setStaffelRows(initial.staffelSchedule);
     if (initial.indexMarginEntries?.length) setIndexRows(initial.indexMarginEntries);
@@ -104,6 +106,7 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
       purchasePrice: +purchasePrice,
       acquisitionFeesPct:   feesMode === 'pct'   ? +feesPct   : undefined,
       acquisitionFeesFixed: feesMode === 'fixed' ? +feesFixed : undefined,
+      acquisitionFeesLump:  feesLump !== '' ? +feesLump : undefined,
       rateModelType,
       staffelSchedule:    rateModelType === 'staffel'     ? staffelRows : [],
       indexMarginEntries: rateModelType === 'indexMargin' ? indexRows   : [],
@@ -162,6 +165,19 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
             <input type="number" className={`${inputClass} w-48`} min={0} step={1000}
               value={feesFixed as number} onChange={e => setFeesFixed(+e.target.value)} />
           )}
+          <div className="mt-3">
+            <label className={labelClass}>Pauschale (€)</label>
+            <div className="flex items-center gap-2">
+              <input type="number" className={`${inputClass} w-48`} min={0} step={100}
+                placeholder="0"
+                value={feesLump as number}
+                onChange={e => setFeesLump(e.target.value === '' ? '' : +e.target.value)} />
+              {feesLump !== '' && +feesLump > 0 && (
+                <span className="text-sm text-gray-500">= {(+feesLump).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Wird zusätzlich zu Prozentsatz / Festbetrag addiert</p>
+          </div>
         </div>
       </div>
 

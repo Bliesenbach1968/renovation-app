@@ -6,7 +6,7 @@ const PHASE_NAMES: Record<PhaseType, string> = {
   specialConstruction: 'Sonderarbeiten',
   baunebenkosten: 'Baunebenkosten',
   planungskosten: 'Planungskosten',
-  ausstellung: 'Ausstellung',
+  ausstellung: 'Ausstattung',
   vertrieb: 'Vertrieb',
 };
 const PHASE_ORDER: PhaseType[] = ['demolition', 'renovation', 'specialConstruction'];

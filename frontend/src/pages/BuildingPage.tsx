@@ -1,15 +1,17 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import {
   getProject, getFloors, getRooms, createFloor, createRoom, deleteRoom, deleteFloor,
-  getUnits, createUnit, deleteUnit, getTemplates, getPositions, deletePosition,
+  getUnits, createUnit, updateUnit, deleteUnit, getTemplates, getPositions, createPosition, updatePosition, deletePosition,
   getContainers, createContainer, updateContainer, deleteContainer,
   getGerueste, createGeruest, updateGeruest, deleteGeruest,
   getKraene, createKran, updateKran, deleteKran,
+  copyRoom,
 } from '../api/projects';
 import type { Floor, Unit, Room, PhaseType, PositionTemplate, Position, Container, Geruest, Kran } from '../types';
 import PositionForm, { getBereicheForPhase } from '../components/PositionForm';
+import CopyApartmentDialog from '../components/CopyApartmentDialog';
 
 const ROOM_TYPE_LABELS: Record<string, string> = {
   livingRoom: 'Wohnzimmer', bedroom: 'Schlafzimmer', bathroom: 'Bad/WC',
@@ -401,6 +403,196 @@ function BereichPositionsPanel({
   );
 }
 
+interface PauschaleFormState {
+  name: string;
+  quantity: number;
+  unit: string;
+  pricePerUnit: number;
+  description: string;
+}
+
+function emptyPauschaleForm(): PauschaleFormState {
+  return { name: '', quantity: 1, unit: 'Psch', pricePerUnit: 0, description: '' };
+}
+
+function PauschaleInlineForm({
+  initial,
+  title,
+  onSave,
+  onCancel,
+  saveLabel = 'Speichern',
+}: {
+  initial: PauschaleFormState;
+  title: string;
+  onSave: (f: PauschaleFormState) => void;
+  onCancel: () => void;
+  saveLabel?: string;
+}) {
+  const [f, setF] = useState<PauschaleFormState>(initial);
+  const set = (k: keyof PauschaleFormState, v: string | number) => setF(prev => ({ ...prev, [k]: v }));
+  const preview = +(f.quantity * f.pricePerUnit).toFixed(2);
+
+  return (
+    <div className="border border-primary-200 rounded-xl p-4 bg-white shadow-sm space-y-3">
+      <p className="text-sm font-semibold text-primary-700">{title}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
+          <label className="label">Bezeichnung *</label>
+          <input value={f.name} onChange={e => set('name', e.target.value)} className="input" placeholder="z.B. Pauschale Entkernung" />
+        </div>
+        <div>
+          <label className="label">Einheit</label>
+          <select value={f.unit} onChange={e => set('unit', e.target.value)} className="input">
+            {['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psch', 't'].map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Menge</label>
+          <input type="number" min="0" step="0.01" value={f.quantity} onChange={e => set('quantity', +e.target.value)} className="input" />
+        </div>
+        <div>
+          <label className="label">Kosten pro Einheit (€)</label>
+          <input type="number" min="0" step="0.01" value={f.pricePerUnit} onChange={e => set('pricePerUnit', +e.target.value)} className="input" />
+        </div>
+        <div className="flex items-end">
+          {preview > 0 && (
+            <p className="text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
+              Gesamt: {preview.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+            </p>
+          )}
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">Beschreibung</label>
+          <textarea value={f.description} onChange={e => set('description', e.target.value)} className="input resize-none" rows={2} placeholder="Optionale Beschreibung..." />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => onSave(f)} disabled={!f.name} className="btn-primary text-sm">{saveLabel}</button>
+        <button onClick={onCancel} className="btn-secondary text-sm">Abbrechen</button>
+      </div>
+    </div>
+  );
+}
+
+function PauschalePanel({
+  projectId, phase, onDismiss,
+}: {
+  projectId: string;
+  phase: string;
+  onDismiss?: () => void;
+}) {
+  const qc = useQueryClient();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editPos, setEditPos] = useState<Position | null>(null);
+
+  const { data: bereichPositions = [] } = useQuery(
+    ['positions', 'bereich', projectId, phase, 'XI. Pauschale Kosten'],
+    () => getPositions(projectId, { phaseType: phase, bereich: 'XI. Pauschale Kosten', noRoom: 'true' })
+  );
+  const positionsList = bereichPositions as Position[];
+
+  const inv = () => qc.invalidateQueries(['positions', 'bereich', projectId]);
+
+  const createMut = useMutation(
+    (f: PauschaleFormState) => createPosition(projectId, {
+      phaseType: phase as PhaseType,
+      bereich: 'XI. Pauschale Kosten',
+      name: f.name,
+      unit: f.unit as any,
+      quantity: f.quantity,
+      materialCostPerUnit: f.pricePerUnit,
+      disposalCostPerUnit: 0,
+      laborHoursPerUnit: 0,
+      laborHourlyRate: 0,
+      description: f.description || undefined,
+      category: 'Pauschale',
+    } as any),
+    { onSuccess: () => { inv(); setShowAddForm(false); } }
+  );
+
+  const updateMut = useMutation(
+    ({ id, f }: { id: string; f: PauschaleFormState }) => updatePosition(projectId, id, {
+      name: f.name, unit: f.unit as any, quantity: f.quantity,
+      materialCostPerUnit: f.pricePerUnit, description: f.description || undefined,
+    }),
+    { onSuccess: () => { inv(); setEditPos(null); } }
+  );
+
+  const deleteMut = useMutation(
+    (id: string) => deletePosition(projectId, id),
+    { onSuccess: inv }
+  );
+
+  return (
+    <div className="border border-primary-200/60 bg-primary-50/30 rounded-xl p-4 mb-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
+          XI. Pauschale Kosten
+        </h3>
+        {onDismiss && (
+          <button onClick={onDismiss} className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 transition-colors">Löschen</button>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {!showAddForm && !editPos && (
+          <button onClick={() => setShowAddForm(true)} className="btn-primary w-full text-sm py-2">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            + Position hinzufügen
+          </button>
+        )}
+
+        {showAddForm && !editPos && (
+          <PauschaleInlineForm
+            title="Neue Pauschalposition"
+            initial={emptyPauschaleForm()}
+            onSave={(f) => createMut.mutate(f)}
+            onCancel={() => setShowAddForm(false)}
+            saveLabel="Position anlegen"
+          />
+        )}
+
+        {positionsList.length > 0 && (
+          <>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-1 pb-0.5">
+              Angelegte Positionen ({positionsList.length})
+            </p>
+            {positionsList.map(p => (
+              <div key={p._id}>
+                {editPos?._id === p._id ? (
+                  <PauschaleInlineForm
+                    title={`Bearbeiten: ${p.name}`}
+                    initial={{ name: p.name, unit: p.unit, quantity: p.quantity, pricePerUnit: p.materialCostPerUnit, description: p.description || '' }}
+                    onSave={(f) => updateMut.mutate({ id: p._id, f })}
+                    onCancel={() => setEditPos(null)}
+                    saveLabel="Änderungen speichern"
+                  />
+                ) : (
+                  <div className="group flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-slate-800 truncate block">{p.name}</span>
+                      <span className="text-xs text-slate-400">
+                        {p.quantity} {p.unit}
+                        {p.totalCost > 0 && ` · ${p.totalCost.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}`}
+                        {p.description && ` · ${p.description}`}
+                      </span>
+                    </div>
+                    <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => { setEditPos(p); setShowAddForm(false); }} className="text-xs px-2 py-1 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600">✏</button>
+                      <button onClick={() => { if (confirm(`Position "${p.name}" löschen?`)) deleteMut.mutate(p._id); }} className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-600">✕</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddFloorModal({ projectId, phaseType, onClose }: { projectId: string; phaseType: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState('');
@@ -438,10 +630,38 @@ function AddFloorModal({ projectId, phaseType, onClose }: { projectId: string; p
   );
 }
 
-function AddUnitModal({ projectId, floorId, onClose }: { projectId: string; floorId: string; onClose: () => void }) {
+/** Berechnet die nächste logische Wohnungsnummer aus vorhandenen Nummern.
+ *  Erkennt Muster wie "WE01","WE02" → "WE03" oder "01","02" → "03".
+ *  Gibt leeren String zurück wenn kein Muster erkennbar. */
+function suggestNextUnitNumber(existingNumbers: string[]): string {
+  const nums = existingNumbers.filter(Boolean);
+  if (nums.length === 0) return '';
+  // Extrahiere numerischen Suffix und Präfix aus allen vorhandenen Nummern
+  // z.B. "WE01" → prefix="WE", num=1, pad=2
+  const parsed = nums.map(n => {
+    const m = n.match(/^([A-Za-z\-_]*)(\d+)([A-Za-z\-_]*)$/);
+    if (!m) return null;
+    return { prefix: m[1], num: parseInt(m[2], 10), pad: m[2].length, suffix: m[3] };
+  }).filter(Boolean) as { prefix: string; num: number; pad: number; suffix: string }[];
+  if (parsed.length === 0) return '';
+  // Prüfe ob alle das gleiche Muster haben
+  const first = parsed[0];
+  const allSame = parsed.every(p => p.prefix === first.prefix && p.suffix === first.suffix);
+  if (!allSame) return '';
+  const maxNum = Math.max(...parsed.map(p => p.num));
+  const nextNum = maxNum + 1;
+  const padded = String(nextNum).padStart(first.pad, '0');
+  return `${first.prefix}${padded}${first.suffix}`;
+}
+
+function AddUnitModal({ projectId, floorId, floors, existingUnits, onClose }: {
+  projectId: string; floorId: string; floors: Floor[]; existingUnits: Unit[]; onClose: () => void;
+}) {
   const qc = useQueryClient();
+  const floor = floors.find(f => f._id === floorId);
+  const suggested = suggestNextUnitNumber(existingUnits.map(u => u.number || ''));
+  const [number, setNumber] = useState(suggested);
   const [name, setName] = useState('');
-  const [number, setNumber] = useState('');
   const mutation = useMutation(
     () => createUnit(projectId, { floorId, name: name || `Wohnung ${number}`, number: number || undefined }),
     { onSuccess: () => { qc.invalidateQueries(['units', projectId]); onClose(); } }
@@ -449,11 +669,17 @@ function AddUnitModal({ projectId, floorId, onClose }: { projectId: string; floo
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 className="font-semibold text-lg mb-4">Neue Wohnung anlegen</h3>
+        <div className="flex items-baseline gap-3 mb-4">
+          <h3 className="font-semibold text-lg">Neue Wohnung anlegen</h3>
+          {floor && <span className="text-sm text-gray-400">{floor.name}</span>}
+        </div>
         <div className="space-y-4">
           <div>
             <label className="label">Wohnungsnummer</label>
-            <input value={number} onChange={(e) => setNumber(e.target.value)} className="input" placeholder="z.B. 01, 1A, EG-links" />
+            <input value={number} onChange={(e) => setNumber(e.target.value)} className="input" placeholder="z.B. WE01, 1A, EG-links" autoFocus />
+            {suggested && number === suggested && (
+              <p className="text-xs text-gray-400 mt-1">Vorschlag basierend auf vorhandenen Wohnungen</p>
+            )}
           </div>
           <div>
             <label className="label">Bezeichnung</label>
@@ -462,6 +688,44 @@ function AddUnitModal({ projectId, floorId, onClose }: { projectId: string; floo
         </div>
         <div className="flex gap-3 mt-6">
           <button onClick={() => mutation.mutate()} disabled={mutation.isLoading || (!name && !number)} className="btn-primary">Anlegen</button>
+          <button onClick={onClose} className="btn-secondary">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditUnitModal({ projectId, unit, floors, onClose }: { projectId: string; unit: Unit; floors: Floor[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(unit.name || '');
+  const [number, setNumber] = useState(unit.number || '');
+  const floor = floors.find(f => f._id === (unit.floorId as any));
+  const mutation = useMutation(
+    () => updateUnit(projectId, unit._id, { name: name || undefined, number: number || undefined }),
+    { onSuccess: () => { qc.invalidateQueries(['units', projectId]); onClose(); } }
+  );
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-baseline gap-3 mb-4">
+          <h3 className="font-semibold text-lg">Wohnung bearbeiten</h3>
+          {floor && <span className="text-sm text-gray-400">{floor.name}</span>}
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Wohnungsnummer</label>
+            <input value={number} onChange={(e) => setNumber(e.target.value)} className="input" placeholder="z.B. WE01, 1A, EG-links" />
+          </div>
+          <div>
+            <label className="label">Bezeichnung</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="z.B. EG links" />
+          </div>
+        </div>
+        {mutation.isError && (
+          <p className="text-red-600 text-sm mt-3">{(mutation.error as any)?.response?.data?.message || 'Fehler beim Speichern'}</p>
+        )}
+        <div className="flex gap-3 mt-6">
+          <button onClick={() => mutation.mutate()} disabled={mutation.isLoading || (!name && !number)} className="btn-primary">Speichern</button>
           <button onClick={onClose} className="btn-secondary">Abbrechen</button>
         </div>
       </div>
@@ -522,6 +786,52 @@ function AddRoomModal({ projectId, floorId, unitId, onClose }: {
   );
 }
 
+interface RoomCardProps {
+  room: Room;
+  isDragging: boolean;
+  projectId: string;
+  selectedPhase: string;
+  selectedBereich: string;
+  selectedUnterpunkt: string;
+  onDragStart: (e: React.DragEvent, roomId: string) => void;
+  onDragEnd: () => void;
+  onDelete: (roomId: string) => void;
+}
+
+function RoomCard({ room, isDragging, projectId, selectedPhase, selectedBereich, selectedUnterpunkt, onDragStart, onDragEnd, onDelete }: RoomCardProps) {
+  return (
+    <div
+      className={`group relative border rounded-lg p-3 transition-colors cursor-grab active:cursor-grabbing ${
+        isDragging
+          ? 'border-primary-400 bg-primary-50 opacity-60 ring-2 ring-primary-300'
+          : 'border-gray-200 hover:border-primary-300 hover:bg-primary-50'
+      }`}
+      draggable
+      onDragStart={e => onDragStart(e, room._id)}
+      onDragEnd={onDragEnd}
+      title="Ziehen zum Kopieren in andere Wohnung"
+    >
+      <Link
+        to={`/projects/${projectId}/rooms/${room._id}?phase=${selectedPhase}${selectedBereich ? `&bereich=${encodeURIComponent(selectedBereich)}` : ''}${selectedUnterpunkt ? `&unterpunkt=${encodeURIComponent(selectedUnterpunkt)}` : ''}`}
+        className="block"
+        draggable={false}
+      >
+        <p className="font-medium text-sm text-gray-900">{room.name}</p>
+        <p className="text-xs text-gray-500">{ROOM_TYPE_LABELS[room.type] || room.type}</p>
+        {room.dimensions?.area && <p className="text-xs text-primary-600 mt-1">{room.dimensions.area} m²</p>}
+        {room.properties?.includes('asbestos') && (
+          <span className="inline-block mt-1 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Asbest</span>
+        )}
+      </Link>
+      <button
+        onClick={() => { if (confirm(`Raum "${room.name}" wirklich löschen?`)) onDelete(room._id); }}
+        className="absolute top-2 right-2 hidden group-hover:flex items-center justify-center w-6 h-6 rounded bg-red-100 text-red-600 hover:bg-red-200 text-xs"
+        title="Raum löschen"
+      >✕</button>
+    </div>
+  );
+}
+
 export default function BuildingPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -543,6 +853,15 @@ export default function BuildingPage() {
   const [editBereichPosition, setEditBereichPosition] = useState<Position | null>(null);
   const [formBereich, setFormBereich] = useState('');
   const [dismissedPinned, setDismissedPinned] = useState<Set<string>>(new Set());
+  const [showBereichPicker, setShowBereichPicker] = useState(false);
+
+  // ── Wohnung kopieren ──────────────────────────────────────────
+  const [copyUnitTarget, setCopyUnitTarget] = useState<Unit | null>(null);
+  const [editUnitTarget, setEditUnitTarget] = useState<Unit | null>(null);
+
+  // ── Raum-DnD (native HTML5) ───────────────────────────────────
+  const [draggedRoomId, setDraggedRoomId]       = useState<string | null>(null);
+  const [dropTargetKey, setDropTargetKey]       = useState<string | null>(null);
 
   const qc = useQueryClient();
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
@@ -568,6 +887,13 @@ export default function BuildingPage() {
       qc.invalidateQueries(['units', projectId]);
       qc.invalidateQueries(['rooms', projectId]);
     }}
+  );
+
+  // Raum per DnD in Ziel-Wohnung/-Etage kopieren
+  const copyRoomMutation = useMutation(
+    ({ roomId, targetUnitId, targetFloorId }: { roomId: string; targetUnitId: string | null; targetFloorId: string }) =>
+      copyRoom(projectId!, roomId, { targetUnitId, targetFloorId }),
+    { onSuccess: () => qc.invalidateQueries(['rooms', projectId]) }
   );
 
   const { data: templates = [] } = useQuery(
@@ -613,11 +939,25 @@ export default function BuildingPage() {
     return map;
   }, [allPhasePositions, containerItems, geruestItems, kranItems, selectedPhase]);
 
+  const allBereicheForPhase = useMemo(
+    () => getBereicheForPhase(selectedPhase, floors),
+    [selectedPhase, floors]
+  );
+
   const usedBereiche = useMemo(() => {
-    const fromStatic = getBereicheForPhase(selectedPhase, floors);
-    const extra = Object.keys(bereichCount).filter(b => !fromStatic.includes(b));
-    return [...fromStatic, ...extra];
-  }, [selectedPhase, floors, bereichCount]);
+    const extra = Object.keys(bereichCount).filter(b => !allBereicheForPhase.includes(b));
+    if (selectedPhase === 'specialConstruction') {
+      return [...allBereicheForPhase, ...extra];
+    }
+    // Entkernung / Renovierung: nur Bereiche mit Positionen anzeigen
+    const withPositions = allBereicheForPhase.filter(b => bereichCount[b] > 0);
+    const extraWithPositions = extra.filter(b => bereichCount[b] > 0);
+    // Fallback: alle anzeigen wenn noch gar keine Positionen angelegt wurden
+    if (withPositions.length === 0 && extraWithPositions.length === 0) {
+      return [...allBereicheForPhase];
+    }
+    return [...withPositions, ...extraWithPositions];
+  }, [selectedPhase, allBereicheForPhase, bereichCount]);
 
   const bereiche = usedBereiche;
 
@@ -672,22 +1012,62 @@ export default function BuildingPage() {
     return +total.toFixed(2);
   };
 
-  const RoomCard = ({ room }: { room: Room }) => (
-    <div className="group relative border border-gray-200 rounded-lg p-3 hover:border-primary-300 hover:bg-primary-50 transition-colors">
-      <Link to={`/projects/${projectId}/rooms/${room._id}?phase=${selectedPhase}${selectedBereich ? `&bereich=${encodeURIComponent(selectedBereich)}` : ''}${selectedUnterpunkt ? `&unterpunkt=${encodeURIComponent(selectedUnterpunkt)}` : ''}`} className="block">
-        <p className="font-medium text-sm text-gray-900">{room.name}</p>
-        <p className="text-xs text-gray-500">{ROOM_TYPE_LABELS[room.type] || room.type}</p>
-        {room.dimensions?.area && <p className="text-xs text-primary-600 mt-1">{room.dimensions.area} m²</p>}
-        {room.properties?.includes('asbestos') && (
-          <span className="inline-block mt-1 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Asbest</span>
-        )}
-      </Link>
-      <button
-        onClick={() => { if (confirm(`Raum "${room.name}" wirklich löschen?`)) deleteRoomMutation.mutate(room._id); }}
-        className="absolute top-2 right-2 hidden group-hover:flex items-center justify-center w-6 h-6 rounded bg-red-100 text-red-600 hover:bg-red-200 text-xs"
-        title="Raum löschen">✕</button>
-    </div>
-  );
+  // ── DnD-Hilfsfunktionen ───────────────────────────────────────
+  // WICHTIG: setDraggedRoomId via setTimeout(0) verzögert, damit der Browser
+  // das Drag-Element vollständig einfriert, bevor React das DOM mutiert.
+  // Eine synchrone setState-Änderung in onDragStart kann die className des
+  // gezogenen Elements sofort updaten und so den Drag abbrechen.
+  function handleRoomDragStart(e: React.DragEvent, roomId: string) {
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', roomId);
+    setTimeout(() => setDraggedRoomId(roomId), 0);
+  }
+
+  function handleRoomDragEnd() {
+    setDraggedRoomId(null);
+    setDropTargetKey(null);
+  }
+
+  function onDragEnter(e: React.DragEvent, key: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetKey(key);
+  }
+
+  function onDragLeave(e: React.DragEvent, key: string) {
+    // Nur zurücksetzen wenn der Cursor den Container wirklich verlässt (nicht nur ein Kind-Element)
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDropTargetKey(prev => (prev === key ? null : prev));
+    }
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function dropOnUnit(e: React.DragEvent, targetUnitId: string, targetFloorId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const roomId = e.dataTransfer.getData('text/plain') || draggedRoomId;
+    if (!roomId) return;
+    const srcRoom = (rooms as Room[]).find(r => r._id === roomId);
+    const srcUnitId = srcRoom?.unitId
+      ? (typeof srcRoom.unitId === 'string' ? srcRoom.unitId : (srcRoom.unitId as Unit)._id)
+      : null;
+    if (srcUnitId === targetUnitId) { setDraggedRoomId(null); setDropTargetKey(null); return; }
+    copyRoomMutation.mutate({ roomId, targetUnitId, targetFloorId });
+    setDraggedRoomId(null); setDropTargetKey(null);
+  }
+
+  function dropOnFloor(e: React.DragEvent, targetFloorId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const roomId = e.dataTransfer.getData('text/plain') || draggedRoomId;
+    if (!roomId) return;
+    copyRoomMutation.mutate({ roomId, targetUnitId: null, targetFloorId });
+    setDraggedRoomId(null); setDropTargetKey(null);
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -696,26 +1076,15 @@ export default function BuildingPage() {
         <h1 className="text-xl font-bold text-gray-900">{project?.name} – Gebäudestruktur</h1>
       </div>
 
-      {/* Phase-Tabs */}
-      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-      <div className="flex gap-2 border-b border-gray-200 pb-0 min-w-max">
-        {[
-          { key: 'demolition', label: 'Entkernung' },
-          { key: 'renovation', label: 'Renovierung' },
-          { key: 'specialConstruction', label: 'Sonderarbeiten' },
-        ].map((tab) => (
-          <Link key={tab.key}
-            to={`/projects/${projectId}/building?phase=${tab.key}`}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              selectedPhase === tab.key
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </div>
+      {/* Aktive Phase als Badge */}
+      <div className="mb-4">
+        <span className="inline-block px-3 py-1 rounded-full text-sm font-semibold border-2 border-primary-600 text-primary-600 bg-primary-50">
+          {{
+            demolition: 'Entkernung',
+            renovation: 'Renovierung',
+            specialConstruction: 'Sonderarbeiten',
+          }[selectedPhase] ?? selectedPhase}
+        </span>
       </div>
 
       {/* Bereich-Filter */}
@@ -754,6 +1123,26 @@ export default function BuildingPage() {
             </button>
           );
         })}
+
+        {/* ＋ Bereich öffnen – auch ohne Positionen */}
+        {selectedPhase !== 'specialConstruction' && (
+          <div className="relative">
+            <button
+              onClick={() => setShowBereichPicker(p => !p)}
+              className="text-xs px-3 py-1 rounded-full border border-dashed border-gray-400 text-gray-500 hover:border-primary-500 hover:text-primary-600 transition-colors"
+            >＋ Bereich</button>
+            {showBereichPicker && (
+              <div className="absolute left-0 top-7 z-30 bg-white border border-gray-200 rounded-xl shadow-lg p-2 min-w-[220px]">
+                {allBereicheForPhase.map(b => (
+                  <button key={b} onClick={() => { setBereich(b); setShowBereichPicker(false); }}
+                    className="block w-full text-left text-sm px-3 py-1.5 rounded-lg hover:bg-primary-50 hover:text-primary-700 transition-colors">
+                    {b}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bereich-Vorlagen-Panel */}
@@ -771,6 +1160,8 @@ export default function BuildingPage() {
             : selectedBereich === 'Gerüst'
             ? <GeruestPanel projectId={projectId!} />
             : <KranPanel projectId={projectId!} />
+          : selectedBereich === 'XI. Pauschale Kosten' && selectedPhase !== 'specialConstruction'
+          ? <PauschalePanel projectId={projectId!} phase={selectedPhase} />
           : !pinnedBereiche.includes(selectedBereich)
           ? <BereichPositionsPanel
               projectId={projectId!}
@@ -797,25 +1188,27 @@ export default function BuildingPage() {
       {pinnedBereiche.filter(b => !dismissedPinned.has(b)).length > 0 && (
         <div className="space-y-0 mb-2">
           {pinnedBereiche.filter(b => !dismissedPinned.has(b)).map(b => (
-            <BereichPositionsPanel
-              key={b}
-              projectId={projectId!}
-              phase={selectedPhase}
-              bereich={b}
-              onAdd={(template) => {
-                setEditBereichPosition(null);
-                setSelectedTemplate(template || null);
-                setFormBereich(b);
-                setShowBereichForm(true);
-              }}
-              onEdit={(pos) => {
-                setEditBereichPosition(pos);
-                setSelectedTemplate(null);
-                setFormBereich(b);
-                setShowBereichForm(true);
-              }}
-              onDismiss={() => setDismissedPinned(prev => new Set([...prev, b]))}
-            />
+            b === 'XI. Pauschale Kosten' && selectedPhase !== 'specialConstruction'
+              ? <PauschalePanel key={b} projectId={projectId!} phase={selectedPhase} onDismiss={() => setDismissedPinned(prev => new Set([...prev, b]))} />
+              : <BereichPositionsPanel
+                  key={b}
+                  projectId={projectId!}
+                  phase={selectedPhase}
+                  bereich={b}
+                  onAdd={(template) => {
+                    setEditBereichPosition(null);
+                    setSelectedTemplate(template || null);
+                    setFormBereich(b);
+                    setShowBereichForm(true);
+                  }}
+                  onEdit={(pos) => {
+                    setEditBereichPosition(pos);
+                    setSelectedTemplate(null);
+                    setFormBereich(b);
+                    setShowBereichForm(true);
+                  }}
+                  onDismiss={() => setDismissedPinned(prev => new Set([...prev, b]))}
+                />
           ))}
         </div>
       )}
@@ -855,35 +1248,92 @@ export default function BuildingPage() {
                 </div>
               </div>
 
+              {/* Drop-Zone für direkte Etagenablage – sichtbar bei jedem Drag */}
+              {draggedRoomId && (() => {
+                const key = `floor:${floor._id}`;
+                const active = dropTargetKey === key;
+                return (
+                  <div
+                    className={`mb-3 rounded-lg border-2 border-dashed text-center py-2 px-3 text-xs font-medium transition-all cursor-copy ${
+                      active
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-slate-300 text-slate-400'
+                    }`}
+                    onDragEnter={e => onDragEnter(e, key)}
+                    onDragLeave={e => onDragLeave(e, key)}
+                    onDragOver={onDragOver}
+                    onDrop={e => dropOnFloor(e, floor._id)}
+                  >
+                    {active ? `↓ Raum in „${floor.name}" kopieren (ohne Wohnung)` : `Hier ablegen → in „${floor.name}" kopieren`}
+                  </div>
+                );
+              })()}
+
               {/* Direkte Räume (ohne Wohnung) */}
               {directRooms.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
-                  {directRooms.map((room) => <RoomCard key={room._id} room={room} />)}
+                  {directRooms.map((room) => (
+                    <RoomCard key={room._id} room={room}
+                      isDragging={draggedRoomId === room._id}
+                      projectId={projectId!} selectedPhase={selectedPhase}
+                      selectedBereich={selectedBereich} selectedUnterpunkt={selectedUnterpunkt}
+                      onDragStart={handleRoomDragStart} onDragEnd={handleRoomDragEnd}
+                      onDelete={(id) => deleteRoomMutation.mutate(id)}
+                    />
+                  ))}
                 </div>
               )}
 
-              {directRooms.length === 0 && floorUnits.length === 0 && (
+              {directRooms.length === 0 && floorUnits.length === 0 && !draggedRoomId && (
                 <p className="text-sm text-gray-400 py-2">Noch keine Räume – "+ Raum" oder "+ Wohnung" klicken</p>
               )}
 
               {/* Wohnungen */}
               {floorUnits.map((unit) => {
                 const unitRooms = roomsByUnit(unit._id);
+                const dropKey   = `unit:${unit._id}`;
+                const isDropTarget = draggedRoomId !== null && dropTargetKey === dropKey;
                 return (
-                  <div key={unit._id} className="mt-3 border border-slate-200 rounded-lg p-3 bg-slate-50/40">
+                  <div
+                    key={unit._id}
+                    className={`mt-3 border rounded-lg p-3 transition-colors ${
+                      isDropTarget
+                        ? 'border-primary-400 bg-primary-50/60 ring-2 ring-primary-300'
+                        : 'border-slate-200 bg-slate-50/40'
+                    }`}
+                    onDragEnter={e => onDragEnter(e, dropKey)}
+                    onDragLeave={e => onDragLeave(e, dropKey)}
+                    onDragOver={onDragOver}
+                    onDrop={e => dropOnUnit(e, unit._id, floor._id)}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-slate-700">{unit.name}</span>
-                        {unit.number && <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Nr. {unit.number}</span>}
+                        {unit.number && <span className="font-bold text-sm text-slate-800">{unit.number}</span>}
+                        <span className="text-sm text-slate-600">{unit.name}</span>
                         <span className="text-xs text-gray-400">{unitRooms.length} Räume</span>
                         {unitTotalArea(unit._id) > 0 && (
                           <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
                             {unitTotalArea(unit._id)} m² gesamt
                           </span>
                         )}
+                        {isDropTarget && (
+                          <span className="text-xs font-medium bg-primary-100 text-primary-700 border border-primary-300 px-2 py-0.5 rounded-full animate-pulse">
+                            Zum Kopieren hier ablegen
+                          </span>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => setAddRoomTarget({ floorId: floor._id, unitId: unit._id })} className="btn-secondary btn-sm text-xs">+ Raum</button>
+                        <button
+                          onClick={() => setEditUnitTarget(unit)}
+                          className="text-xs border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg px-2 py-1"
+                          title="Wohnung bearbeiten">✏ Bearbeiten</button>
+                        {/* ── Wohnung kopieren ── */}
+                        <button
+                          onClick={() => setCopyUnitTarget(unit)}
+                          className="text-xs border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg px-2 py-1"
+                          title="Wohnung kopieren"
+                        >⎘ Kopieren</button>
                         <button
                           onClick={() => { if (confirm(`Wohnung "${unit.name}" und alle Räume wirklich löschen?`)) deleteUnitMutation.mutate(unit._id); }}
                           className="text-xs border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg px-2 py-1"
@@ -891,10 +1341,20 @@ export default function BuildingPage() {
                       </div>
                     </div>
                     {unitRooms.length === 0 ? (
-                      <p className="text-xs text-gray-400 py-1">Noch keine Räume – "+ Raum" klicken</p>
+                      <p className="text-xs text-gray-400 py-1">
+                        {isDropTarget ? 'Raum hier ablegen zum Kopieren' : 'Noch keine Räume – "+ Raum" klicken'}
+                      </p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {unitRooms.map((room) => <RoomCard key={room._id} room={room} />)}
+                        {unitRooms.map((room) => (
+                          <RoomCard key={room._id} room={room}
+                            isDragging={draggedRoomId === room._id}
+                            projectId={projectId!} selectedPhase={selectedPhase}
+                            selectedBereich={selectedBereich} selectedUnterpunkt={selectedUnterpunkt}
+                            onDragStart={handleRoomDragStart} onDragEnd={handleRoomDragEnd}
+                            onDelete={(id) => deleteRoomMutation.mutate(id)}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -908,7 +1368,17 @@ export default function BuildingPage() {
       </div>
 
       {showAddFloor && <AddFloorModal projectId={projectId!} phaseType={selectedPhase} onClose={() => setShowAddFloor(false)} />}
-      {addUnitFloor && <AddUnitModal projectId={projectId!} floorId={addUnitFloor} onClose={() => setAddUnitFloor(null)} />}
+      {addUnitFloor && <AddUnitModal projectId={projectId!} floorId={addUnitFloor} floors={sortedFloors} existingUnits={units as Unit[]} onClose={() => setAddUnitFloor(null)} />}
+      {editUnitTarget && <EditUnitModal projectId={projectId!} unit={editUnitTarget} floors={sortedFloors} onClose={() => setEditUnitTarget(null)} />}
+      {copyUnitTarget && (
+        <CopyApartmentDialog
+          projectId={projectId!}
+          sourceUnit={copyUnitTarget}
+          floors={sortedFloors}
+          allUnits={units as Unit[]}
+          onClose={() => setCopyUnitTarget(null)}
+        />
+      )}
       {addRoomTarget && (
         <AddRoomModal
           projectId={projectId!}

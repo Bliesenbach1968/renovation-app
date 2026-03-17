@@ -43,6 +43,8 @@ const financeParamsSchema = new mongoose.Schema({
   acquisitionFeesPct: { type: Number, min: 0, max: 100, default: null },
   /** ODER als Festbetrag in EUR */
   acquisitionFeesFixed: { type: Number, min: 0, default: null },
+  /** Zusätzliche Pauschale in EUR (wird immer addiert) */
+  acquisitionFeesLump: { type: Number, min: 0, default: null },
 
   // ── Zinsmodell ────────────────────────────────────────────────────────
   rateModelType: {

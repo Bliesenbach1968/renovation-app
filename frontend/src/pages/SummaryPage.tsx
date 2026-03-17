@@ -12,7 +12,7 @@ import type { FinanceSummary } from '../domain/finance/VariableInterestEngine';
 const PLAN_PHASE_NAMES: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
   baunebenkosten: 'Baunebenkosten', planungskosten: 'Planungskosten',
-  ausstellung: 'Ausstellung', vertrieb: 'Vertrieb',
+  ausstellung: 'Ausstattung', vertrieb: 'Vertrieb',
 };
 const PLAN_PHASE_ORDER = ['demolition', 'renovation', 'specialConstruction', 'baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'];
 const MODULE_PHASES = ['baunebenkosten', 'planungskosten', 'ausstellung', 'vertrieb'] as const;
@@ -117,7 +117,7 @@ function eur(n: number) {
 const PHASE_NAMES: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
   baunebenkosten: 'Baunebenkosten', planungskosten: 'Planungskosten',
-  ausstellung: 'Ausstellung', vertrieb: 'Vertrieb',
+  ausstellung: 'Ausstattung', vertrieb: 'Vertrieb',
 };
 const PHASE_COLORS: Record<string, string> = {
   demolition: 'border-l-red-500', renovation: 'border-l-blue-500', specialConstruction: 'border-l-green-500',

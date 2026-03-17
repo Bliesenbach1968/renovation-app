@@ -15,4 +15,6 @@ router.route('/:projectId/rooms/:id')
   .put(roomController.updateRoom)
   .delete(roomController.deleteRoom);
 
+router.post('/:projectId/rooms/:id/copy', roomController.copyRoom);
+
 module.exports = router;

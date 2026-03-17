@@ -35,11 +35,11 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
     ],
   },
   ausstellung: {
-    label: 'Ausstellung',
-    bereich: 'Ausstellung',
-    defaultName: 'Ausstellungskosten',
+    label: 'Ausstattung',
+    bereich: 'Ausstattung',
+    defaultName: 'Ausstattungskosten',
     examples: [
-      'Ausstellungskosten', 'Musterwohnung', 'Broschüren und Werbematerial', 'Besichtigungsorganisation',
+      'Ausstattungskosten', 'Musterwohnung', 'Broschüren und Werbematerial', 'Besichtigungsorganisation',
     ],
   },
   vertrieb: {

@@ -5,7 +5,7 @@
  * Route: /projects/:id/finance
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from 'react-query';
 import { getProject } from '../api/projects';
@@ -51,6 +51,14 @@ export default function FinancePage() {
       },
     }
   );
+
+  // Automatisch berechnen wenn gespeicherte Parameter vorhanden
+  useEffect(() => {
+    if (savedParams && !result) {
+      calcMutation.mutate(savedParams);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedParams]);
 
   const handleSubmit = (params: Partial<FinanceParamsDto>) => {
     calcMutation.mutate(params);

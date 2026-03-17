@@ -71,8 +71,21 @@ export const createUnit = async (projectId: string, body: Partial<Unit>) => {
   const { data } = await client.post(`/projects/${projectId}/units`, body);
   return data.data as Unit;
 };
+export const updateUnit = async (projectId: string, id: string, body: { name?: string; number?: string }) => {
+  const { data } = await client.put(`/projects/${projectId}/units/${id}`, body);
+  return data.data;
+};
 export const deleteUnit = async (projectId: string, id: string) =>
   client.delete(`/projects/${projectId}/units/${id}`);
+
+export const copyUnit = async (
+  projectId: string,
+  id: string,
+  body: { targetFloorId?: string; newName?: string; newNumber?: string; copyRooms?: boolean }
+) => {
+  const { data } = await client.post(`/projects/${projectId}/units/${id}/copy`, body);
+  return data.data as { unit: Unit; rooms: Room[] };
+};
 
 // === Räume ===
 export const getRooms = async (projectId: string, params?: object) => {
@@ -93,6 +106,15 @@ export const updateRoom = async (projectId: string, id: string, body: Partial<Ro
 };
 export const deleteRoom = async (projectId: string, id: string) =>
   client.delete(`/projects/${projectId}/rooms/${id}`);
+
+export const copyRoom = async (
+  projectId: string,
+  id: string,
+  body: { targetUnitId?: string | null; targetFloorId?: string }
+) => {
+  const { data } = await client.post(`/projects/${projectId}/rooms/${id}/copy`, body);
+  return data.data as Room;
+};
 
 // === Positionen ===
 export const getPositions = async (projectId: string, params?: object) => {

@@ -11,6 +11,9 @@ router.route('/:projectId/units')
   .post(unitController.createUnit);
 
 router.route('/:projectId/units/:id')
+  .put(unitController.updateUnit)
   .delete(unitController.deleteUnit);
+
+router.post('/:projectId/units/:id/copy', unitController.copyUnit);
 
 module.exports = router;

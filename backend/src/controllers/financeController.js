@@ -34,6 +34,7 @@ function buildEngineInput(fp, costItems) {
     purchasePrice:        fp.purchasePrice,
     acquisitionFeesPct:   fp.acquisitionFeesPct  ?? undefined,
     acquisitionFeesFixed: fp.acquisitionFeesFixed ?? undefined,
+    acquisitionFeesLump:  fp.acquisitionFeesLump  ?? undefined,
     costItems,
     rateModel,
     dayCount:             fp.dayCount     || 'ACT/360',
