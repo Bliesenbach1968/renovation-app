@@ -855,9 +855,17 @@ export default function BuildingPage() {
   const [dismissedPinned, setDismissedPinned] = useState<Set<string>>(new Set());
   const [showBereichPicker, setShowBereichPicker] = useState(false);
 
-  // ── Wohnung kopieren ──────────────────────────────────────────
+  // ── Wohnung kopieren / bearbeiten ─────────────────────────────
   const [copyUnitTarget, setCopyUnitTarget] = useState<Unit | null>(null);
   const [editUnitTarget, setEditUnitTarget] = useState<Unit | null>(null);
+
+  // ── Wohnung auf-/zuklappen ────────────────────────────────────
+  const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
+  const toggleUnit = (id: string) => setExpandedUnits(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // ── Raum-DnD (native HTML5) ───────────────────────────────────
   const [draggedRoomId, setDraggedRoomId]       = useState<string | null>(null);
@@ -1290,30 +1298,39 @@ export default function BuildingPage() {
 
               {/* Wohnungen */}
               {floorUnits.map((unit) => {
-                const unitRooms = roomsByUnit(unit._id);
-                const dropKey   = `unit:${unit._id}`;
+                const unitRooms    = roomsByUnit(unit._id);
+                const dropKey      = `unit:${unit._id}`;
                 const isDropTarget = draggedRoomId !== null && dropTargetKey === dropKey;
+                const isExpanded   = expandedUnits.has(unit._id);
+                const area         = unitTotalArea(unit._id);
+
                 return (
                   <div
                     key={unit._id}
-                    className={`mt-3 border rounded-lg p-3 transition-colors ${
+                    className={`mt-2 border rounded-lg transition-colors ${
                       isDropTarget
                         ? 'border-primary-400 bg-primary-50/60 ring-2 ring-primary-300'
-                        : 'border-slate-200 bg-slate-50/40'
+                        : isExpanded
+                        ? 'border-primary-200 bg-white shadow-sm'
+                        : 'border-slate-200 bg-slate-50/40 hover:border-slate-300'
                     }`}
                     onDragEnter={e => onDragEnter(e, dropKey)}
                     onDragLeave={e => onDragLeave(e, dropKey)}
                     onDragOver={onDragOver}
                     onDrop={e => dropOnUnit(e, unit._id, floor._id)}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    {/* ── Kopfzeile (immer sichtbar, klickbar) ── */}
+                    <div
+                      className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none"
+                      onClick={() => toggleUnit(unit._id)}
+                    >
                       <div className="flex items-center gap-2 flex-wrap">
                         {unit.number && <span className="font-bold text-sm text-slate-800">{unit.number}</span>}
                         <span className="text-sm text-slate-600">{unit.name}</span>
                         <span className="text-xs text-gray-400">{unitRooms.length} Räume</span>
-                        {unitTotalArea(unit._id) > 0 && (
+                        {area > 0 && (
                           <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            {unitTotalArea(unit._id)} m² gesamt
+                            {area} m² gesamt
                           </span>
                         )}
                         {isDropTarget && (
@@ -1322,39 +1339,55 @@ export default function BuildingPage() {
                           </span>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => setAddRoomTarget({ floorId: floor._id, unitId: unit._id })} className="btn-secondary btn-sm text-xs">+ Raum</button>
-                        <button
-                          onClick={() => setEditUnitTarget(unit)}
-                          className="text-xs border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg px-2 py-1"
-                          title="Wohnung bearbeiten">✏ Bearbeiten</button>
-                        {/* ── Wohnung kopieren ── */}
-                        <button
-                          onClick={() => setCopyUnitTarget(unit)}
-                          className="text-xs border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg px-2 py-1"
-                          title="Wohnung kopieren"
-                        >⎘ Kopieren</button>
-                        <button
-                          onClick={() => { if (confirm(`Wohnung "${unit.name}" und alle Räume wirklich löschen?`)) deleteUnitMutation.mutate(unit._id); }}
-                          className="text-xs border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg px-2 py-1"
-                          title="Wohnung löschen">Löschen</button>
-                      </div>
+                      {/* Chevron */}
+                      <svg
+                        className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
                     </div>
-                    {unitRooms.length === 0 ? (
-                      <p className="text-xs text-gray-400 py-1">
-                        {isDropTarget ? 'Raum hier ablegen zum Kopieren' : 'Noch keine Räume – "+ Raum" klicken'}
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {unitRooms.map((room) => (
-                          <RoomCard key={room._id} room={room}
-                            isDragging={draggedRoomId === room._id}
-                            projectId={projectId!} selectedPhase={selectedPhase}
-                            selectedBereich={selectedBereich} selectedUnterpunkt={selectedUnterpunkt}
-                            onDragStart={handleRoomDragStart} onDragEnd={handleRoomDragEnd}
-                            onDelete={(id) => deleteRoomMutation.mutate(id)}
-                          />
-                        ))}
+
+                    {/* ── Aufgeklappter Bereich ── */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-200 px-3 pt-3 pb-3">
+                        {/* Aktionsbuttons */}
+                        <div className="flex gap-2 flex-wrap mb-3">
+                          <button
+                            onClick={e => { e.stopPropagation(); setAddRoomTarget({ floorId: floor._id, unitId: unit._id }); }}
+                            className="btn-primary btn-sm text-xs">+ Raum</button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setEditUnitTarget(unit); }}
+                            className="text-xs border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg px-2 py-1">
+                            ✏ Bearbeiten</button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setCopyUnitTarget(unit); }}
+                            className="text-xs border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg px-2 py-1">
+                            ⎘ Kopieren</button>
+                          <button
+                            onClick={e => { e.stopPropagation(); if (confirm(`Wohnung "${unit.name}" und alle Räume wirklich löschen?`)) deleteUnitMutation.mutate(unit._id); }}
+                            className="text-xs border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg px-2 py-1">
+                            Löschen</button>
+                        </div>
+
+                        {/* Räume */}
+                        {unitRooms.length === 0 ? (
+                          <p className="text-xs text-gray-400 py-1">
+                            {isDropTarget ? 'Raum hier ablegen zum Kopieren' : 'Noch keine Räume – "+ Raum" klicken'}
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {unitRooms.map((room) => (
+                              <RoomCard key={room._id} room={room}
+                                isDragging={draggedRoomId === room._id}
+                                projectId={projectId!} selectedPhase={selectedPhase}
+                                selectedBereich={selectedBereich} selectedUnterpunkt={selectedUnterpunkt}
+                                onDragStart={handleRoomDragStart} onDragEnd={handleRoomDragEnd}
+                                onDelete={(id) => deleteRoomMutation.mutate(id)}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
