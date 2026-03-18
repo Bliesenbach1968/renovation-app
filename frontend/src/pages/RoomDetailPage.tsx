@@ -38,6 +38,10 @@ export default function RoomDetailPage() {
   const { data: templates = [] } = useQuery(['templates', phase], () => getTemplates(phase));
   const { data: projectFloors = [] } = useQuery(['floors', projectId], () => getFloors(projectId!));
 
+  // Nur den Tab der aktuellen Phase (aus URL-Parameter) anzeigen
+  const MAIN_PHASES: PhaseType[] = ['demolition', 'renovation', 'specialConstruction'];
+  const tabPhases: PhaseType[] = MAIN_PHASES.includes(phase) ? [phase] : MAIN_PHASES;
+
   const deleteMutation = useMutation(
     (posId: string) => deletePosition(projectId!, posId),
     { onSuccess: () => qc.invalidateQueries(['positions', projectId, roomId, phase]) }
@@ -107,7 +111,7 @@ export default function RoomDetailPage() {
       {/* Phase Tabs */}
       <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 mb-6">
       <div className="flex gap-2 border-b border-gray-200 min-w-max">
-        {['demolition', 'renovation', 'specialConstruction'].map((p) => (
+        {tabPhases.map((p) => (
           <button key={p}
             onClick={() => setSearchParams({ phase: p })}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
