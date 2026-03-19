@@ -137,6 +137,10 @@ export default function PositionForm({
 
   const bereiche = getBereicheForPhase(phaseType, projectFloors);
 
+  // Sichtbarkeit der Maß-Badges basierend auf gewählter Kategorie (sub1)
+  const katIsWand  = sub1.toLowerCase().includes('wand');
+  const katIsBoden = sub1.toLowerCase().includes('boden');
+
   // Cascading dropdown options
   const sub1Options = watchedValues.bereich ? (BEREICHE_HIERARCHIE[watchedValues.bereich] ?? []) : [];
   const sub1Node = sub1Options.find(n => n.label === sub1);
@@ -144,17 +148,35 @@ export default function PositionForm({
   const sub2Node = sub2Options.find(n => n.label === sub2);
   const sub3Options = sub2Node?.children ?? [];
 
+  // Extrahiert das Schlüsselwort aus einem Hierarchie-Label wie "b) Estrich" → "Estrich"
+  const extractKeyword = (label: string) => label.replace(/^[a-z0-9]+[.)]\s*/i, '').trim();
+
   const handleSub1Change = (val: string) => {
     setSub1(val); setSub2(''); setSub3('');
     setValue('bereichUnterpunkt', val);
+    if (!editPosition) {
+      const kw = val ? extractKeyword(val) : '';
+      setNameInput(kw);
+      if (kw) setShowSuggestions(true);
+    }
   };
   const handleSub2Change = (val: string) => {
     setSub2(val); setSub3('');
     setValue('bereichUnterpunkt', [sub1, val].filter(Boolean).join(' > '));
+    if (!editPosition) {
+      const kw = val ? extractKeyword(val) : (sub1 ? extractKeyword(sub1) : '');
+      setNameInput(kw);
+      if (kw) setShowSuggestions(true);
+    }
   };
   const handleSub3Change = (val: string) => {
     setSub3(val);
     setValue('bereichUnterpunkt', [sub1, sub2, val].filter(Boolean).join(' > '));
+    if (!editPosition) {
+      const kw = val ? extractKeyword(val) : (sub2 ? extractKeyword(sub2) : '');
+      setNameInput(kw);
+      if (kw) setShowSuggestions(true);
+    }
   };
 
   // Wenn Dicke-Feld eingeblendet wird und noch leer → Standardwert 60 setzen
@@ -198,12 +220,27 @@ export default function PositionForm({
         (!watchedValues.bereich || !t.bereich || t.bereich === watchedValues.bereich)
       );
 
-  const suggestions = nameInput.length >= 1
-    ? phaseFiltered.filter(t =>
-        t.name.toLowerCase().includes(nameInput.toLowerCase()) ||
-        t.category.toLowerCase().includes(nameInput.toLowerCase())
-      ).slice(0, 15)
-    : phaseFiltered.slice(0, 30);
+  const suggestions = (() => {
+    if (nameInput.length < 1) return phaseFiltered.slice(0, 30);
+    const q = nameInput.toLowerCase();
+    const matched = phaseFiltered.filter(t =>
+      t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q)
+    );
+    // Name-Treffer zuerst, dann Kategorie-Treffer
+    matched.sort((a, b) => {
+      const aName = a.name.toLowerCase().includes(q);
+      const bName = b.name.toLowerCase().includes(q);
+      if (aName && !bName) return -1;
+      if (!aName && bName) return 1;
+      // Bei gleichem Treffertyp: exakter Wortanfang zuerst
+      const aStarts = a.name.toLowerCase().startsWith(q);
+      const bStarts = b.name.toLowerCase().startsWith(q);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return 0;
+    });
+    return matched.slice(0, 15);
+  })();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -331,17 +368,17 @@ export default function PositionForm({
                 </select>
                 {internalRoomId && (floorArea != null || wallArea != null) && (
                   <div className="flex gap-2 mt-1.5">
-                    {floorArea != null && (
+                    {floorArea != null && !katIsWand && (
                       <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2 py-0.5">
                         Boden: <strong>{floorArea} m²</strong>
                       </span>
                     )}
-                    {wallArea != null && (
+                    {wallArea != null && !katIsBoden && (
                       <span className="inline-flex items-center gap-1 text-xs bg-slate-50 text-slate-700 border border-slate-200 rounded px-2 py-0.5">
                         Wand: <strong>{wallArea} m²</strong>
                       </span>
                     )}
-                    {perimeter != null && (
+                    {perimeter != null && !katIsWand && (
                       <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
                         Umfang: <strong>{perimeter} lfm</strong>
                       </span>
@@ -365,7 +402,7 @@ export default function PositionForm({
             </div>
             {sub1Options.length > 0 && (
               <div>
-                <label className="label">Unterkategorie</label>
+                <label className="label">Kategorie</label>
                 <select value={sub1} onChange={(e) => handleSub1Change(e.target.value)} className="input">
                   <option value="">– bitte wählen –</option>
                   {sub1Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
@@ -455,25 +492,6 @@ export default function PositionForm({
               )}
             </div>
 
-            {/* Kategorie */}
-            <div>
-              <label className="label">Kategorie</label>
-              <input {...register('category')} className="input" placeholder="z.B. Boden, Wand, Installation" />
-              {watchedValues.unit === 'm²' && floorArea && wallArea && (
-                <div className="flex gap-1 mt-1">
-                  <button type="button"
-                    onClick={() => { setValue('category', 'Boden'); setValue('quantity', floorArea); }}
-                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${watchedValues.category === 'Boden' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}>
-                    Boden ({floorArea} m²)
-                  </button>
-                  <button type="button"
-                    onClick={() => { setValue('category', 'Wand'); setValue('quantity', wallArea); }}
-                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${watchedValues.category === 'Wand' ? 'bg-slate-500 text-white border-slate-500' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}>
-                    Wand ({wallArea} m²)
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* Menge */}
             <div>
@@ -481,9 +499,9 @@ export default function PositionForm({
               <input {...register('quantity', { required: true, valueAsNumber: true, min: 0 })} type="number" step="0.01" className="input" />
               {(floorArea || wallArea || perimeter) && (
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {floorArea && <button type="button" onClick={() => setValue('quantity', floorArea)} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 hover:bg-emerald-100">Boden {floorArea} m²</button>}
-                  {wallArea  && <button type="button" onClick={() => setValue('quantity', wallArea)}  className="text-xs bg-slate-50 text-slate-700 border border-slate-200 rounded px-1.5 py-0.5 hover:bg-slate-100">Wand {wallArea} m²</button>}
-                  {perimeter && <button type="button" onClick={() => setValue('quantity', perimeter)} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 hover:bg-amber-100">Umfang {perimeter} lfm</button>}
+                  {floorArea && !katIsWand  && <button type="button" onClick={() => setValue('quantity', floorArea)} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 hover:bg-emerald-100">Boden {floorArea} m²</button>}
+                  {wallArea  && !katIsBoden && <button type="button" onClick={() => setValue('quantity', wallArea)}  className="text-xs bg-slate-50 text-slate-700 border border-slate-200 rounded px-1.5 py-0.5 hover:bg-slate-100">Wand {wallArea} m²</button>}
+                  {perimeter && !katIsWand  && <button type="button" onClick={() => setValue('quantity', perimeter)} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 hover:bg-amber-100">Umfang {perimeter} lfm</button>}
                 </div>
               )}
             </div>

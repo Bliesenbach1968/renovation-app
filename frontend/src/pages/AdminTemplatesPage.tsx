@@ -11,7 +11,7 @@ const UNITS: PositionUnit[] = ['m²', 'm³', 'lfm', 'Stück', 'Sack', 'kg', 'Psc
 const PHASE_LABELS: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
   baunebenkosten: 'Baunebenkosten', planungskosten: 'Planungskosten',
-  ausstellung: 'Ausstattung', vertrieb: 'Vertrieb', all: 'Alle Phasen',
+  ausstellung: 'Ausstattung', vertrieb: 'Vertriebskosten', all: 'Alle Phasen',
 };
 
 const THICKNESS_KEYWORDS = [
@@ -136,7 +136,7 @@ function TemplateForm({
         </div>
         {sub1Options.length > 0 && (
           <div>
-            <label className="label">Unterkategorie</label>
+            <label className="label">Kategorie</label>
             <select value={sub1} onChange={(e) => handleSub1Change(e.target.value)} className="input">
               <option value="">– bitte wählen –</option>
               {sub1Options.map((n) => <option key={n.label} value={n.label}>{n.label}</option>)}
@@ -182,18 +182,12 @@ function TemplateForm({
         </div>
       )}
 
-      {/* Kategorie + Einheit */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">Kategorie</label>
-          <input {...register('category')} className="input" placeholder="z.B. Boden, Wand" />
-        </div>
-        <div>
-          <label className="label">Einheit</label>
-          <select {...register('unit')} className="input">
-            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-          </select>
-        </div>
+      {/* Einheit */}
+      <div>
+        <label className="label">Einheit</label>
+        <select {...register('unit')} className="input">
+          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
       </div>
 
       {/* Kosten */}
@@ -386,11 +380,11 @@ export default function AdminTemplatesPage() {
                           onClick={() => setEditingId(editingId === t._id ? null : t._id)}
                           className="btn-secondary btn-sm px-2 text-xs"
                           title="Bearbeiten">✏ Bearbeiten</button>
-                        {isAdmin && !t.isSystemDefault && (
+                        {!t.isSystemDefault && (
                           <button
-                            onClick={() => { if (confirm('Vorlage löschen?')) deleteMutation.mutate(t._id); }}
-                            className="text-gray-300 hover:text-red-500 transition-colors px-1"
-                            title="Löschen">✕</button>
+                            onClick={() => { if (confirm('Vorlage wirklich löschen?')) deleteMutation.mutate(t._id); }}
+                            className="btn-sm px-2 text-xs border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors">
+                            🗑 Löschen</button>
                         )}
                       </div>
                     </div>

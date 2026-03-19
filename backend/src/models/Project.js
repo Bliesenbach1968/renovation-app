@@ -65,6 +65,8 @@ const projectSchema = new mongoose.Schema(
     tiefgarage:             { type: Boolean, default: false },
     tiefgarageStellplaetze: { type: Number, default: 0, min: 0 },
     aussenanlagenVorhanden: { type: Boolean, default: false },
+    grundstueckFlaeche:     { type: Number, default: null, min: 0 },
+    anzahlStellplaetze:     { type: Number, default: 0, min: 0 },
 
     // Aktuelle Ist-Gesamtsumme (wird bei jeder Positions-/Container-Änderung aktualisiert)
     aktuelleGesamtsumme: { type: Number, default: null },

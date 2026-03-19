@@ -12,6 +12,7 @@ const roomSchema = new mongoose.Schema(
         'livingRoom', 'bedroom', 'bathroom', 'kitchen', 'hallway',
         'staircase', 'elevator', 'garage', 'basement', 'technicalRoom',
         'balcony', 'terrace', 'garden', 'rooftop', 'other',
+        'office', 'kidsRoom', 'storageRoom',
       ],
       default: 'other',
     },

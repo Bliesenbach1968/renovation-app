@@ -233,6 +233,7 @@ function calculate(input) {
     acquisitionFeesPct,
     acquisitionFeesFixed,
     acquisitionFeesLump,
+    brokerCommissionPct,
     costItems      = [],
     rateModel,
     dayCount       = 'ACT/360',
@@ -255,7 +256,8 @@ function calculate(input) {
   const baseFees = acquisitionFeesFixed != null
     ? +acquisitionFeesFixed
     : (acquisitionFeesPct != null ? purchasePrice * acquisitionFeesPct / 100 : 0);
-  const feesAmount = baseFees + (acquisitionFeesLump != null ? +acquisitionFeesLump : 0);
+  const brokerFees = brokerCommissionPct != null ? purchasePrice * brokerCommissionPct / 100 : 0;
+  const feesAmount = baseFees + (acquisitionFeesLump != null ? +acquisitionFeesLump : 0) + brokerFees;
   const totalAcquisitionDrawdown = purchasePrice + feesAmount;
   const totalProjectCosts = costItems.reduce((s, ci) => s + (ci.amount > 0 ? ci.amount : 0), 0);
 

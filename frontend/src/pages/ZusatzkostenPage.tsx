@@ -43,7 +43,7 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
     ],
   },
   vertrieb: {
-    label: 'Vertrieb',
+    label: 'Vertriebskosten',
     bereich: 'Vertrieb',
     defaultName: 'Maklerprovision',
     examples: [

@@ -34,6 +34,7 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
   const [feesFixed,          setFeesFixed]          = useState(initial?.acquisitionFeesFixed ?? '');
   const [feesMode,           setFeesMode]           = useState<'pct' | 'fixed'>('pct');
   const [feesLump,           setFeesLump]           = useState<number | ''>(initial?.acquisitionFeesLump ?? '');
+  const [brokerPct,          setBrokerPct]          = useState<number | ''>(initial?.brokerCommissionPct ?? '');
 
   const [rateModelType,      setRateModelType]      = useState<'staffel' | 'indexMargin'>(initial?.rateModelType || 'staffel');
   const [staffelRows,        setStaffelRows]        = useState<StaffelEntryDto[]>(
@@ -66,6 +67,7 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
     if (initial.acquisitionFeesPct != null) { setFeesPct(initial.acquisitionFeesPct!); setFeesMode('pct'); }
     if (initial.acquisitionFeesFixed != null) { setFeesFixed(initial.acquisitionFeesFixed!); setFeesMode('fixed'); }
     if (initial.acquisitionFeesLump != null) setFeesLump(initial.acquisitionFeesLump!);
+    if (initial.brokerCommissionPct != null) setBrokerPct(initial.brokerCommissionPct!);
     if (initial.rateModelType)     setRateModelType(initial.rateModelType);
     if (initial.staffelSchedule?.length)    setStaffelRows(initial.staffelSchedule);
     if (initial.indexMarginEntries?.length) setIndexRows(initial.indexMarginEntries);
@@ -106,7 +108,8 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
       purchasePrice: +purchasePrice,
       acquisitionFeesPct:   feesMode === 'pct'   ? +feesPct   : undefined,
       acquisitionFeesFixed: feesMode === 'fixed' ? +feesFixed : undefined,
-      acquisitionFeesLump:  feesLump !== '' ? +feesLump : undefined,
+      acquisitionFeesLump:  feesLump  !== '' ? +feesLump  : undefined,
+      brokerCommissionPct:  brokerPct !== '' ? +brokerPct : undefined,
       rateModelType,
       staffelSchedule:    rateModelType === 'staffel'     ? staffelRows : [],
       indexMarginEntries: rateModelType === 'indexMargin' ? indexRows   : [],
@@ -177,6 +180,19 @@ export default function FinanceConfigurator({ initial, onSubmit, isLoading }: Pr
               )}
             </div>
             <p className="text-xs text-gray-400 mt-1">Wird zusätzlich zu Prozentsatz / Festbetrag addiert</p>
+          </div>
+          <div className="mt-3">
+            <label className={labelClass}>Maklercourtage (%)</label>
+            <div className="flex items-center gap-2">
+              <input type="number" className={`${inputClass} w-28`} min={0} max={10} step={0.01}
+                placeholder="z.B. 3.57"
+                value={brokerPct as number}
+                onChange={e => setBrokerPct(e.target.value === '' ? '' : +e.target.value)} />
+              {brokerPct !== '' && +brokerPct > 0 && (
+                <span className="text-sm text-gray-500">= {((+purchasePrice || 0) * (+brokerPct) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Wird separat auf den Kaufpreis berechnet und addiert</p>
           </div>
         </div>
       </div>

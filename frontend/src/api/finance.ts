@@ -39,6 +39,7 @@ export interface FinanceParamsDto {
   acquisitionFeesPct?: number | null;
   acquisitionFeesFixed?: number | null;
   acquisitionFeesLump?: number | null;
+  brokerCommissionPct?: number | null;
   rateModelType: 'staffel' | 'indexMargin';
   staffelSchedule: StaffelEntryDto[];
   indexMarginEntries: IndexMarginEntryDto[];

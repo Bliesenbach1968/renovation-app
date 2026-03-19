@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { getRoom, getPositions, deletePosition, getTemplates, getFloors } from '../api/projects';
+import { getRoom, getPositions, deletePosition, getTemplates, getFloors, getProject } from '../api/projects';
 import type { Floor, Position, PhaseType } from '../types';
 import PositionForm from '../components/PositionForm';
 
@@ -15,6 +15,7 @@ const ROOM_TYPE_LABELS: Record<string, string> = {
   elevator: 'Aufzug', garage: 'Garage', basement: 'Keller',
   technicalRoom: 'Technikraum', balcony: 'Balkon', terrace: 'Terrasse',
   garden: 'Garten/Außenbereich', rooftop: 'Dach', other: 'Sonstiges',
+  office: 'Arbeitszimmer', kidsRoom: 'Kinderzimmer', storageRoom: 'Abstellraum',
 };
 
 function formatEur(n: number) {
@@ -30,6 +31,7 @@ export default function RoomDetailPage() {
   const [editPosition, setEditPosition] = useState<Position | null>(null);
   const qc = useQueryClient();
 
+  const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: room } = useQuery(['room', projectId, roomId], () => getRoom(projectId!, roomId!));
   const { data: positions = [], isLoading } = useQuery(
     ['positions', projectId, roomId, phase],
@@ -203,7 +205,7 @@ export default function RoomDetailPage() {
           phaseType={phase}
           templates={templates}
           editPosition={editPosition}
-          defaultHourlyRate={45}
+          defaultHourlyRate={(project as any)?.settings?.defaultHourlyRate ?? 45}
           roomDimensions={room?.dimensions}
           projectFloors={projectFloors}
           onClose={() => { setShowForm(false); setEditPosition(null); }}

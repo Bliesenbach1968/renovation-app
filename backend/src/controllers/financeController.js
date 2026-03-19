@@ -32,9 +32,10 @@ function buildEngineInput(fp, costItems) {
   return {
     acquisitionDate:      fp.acquisitionDate,
     purchasePrice:        fp.purchasePrice,
-    acquisitionFeesPct:   fp.acquisitionFeesPct  ?? undefined,
-    acquisitionFeesFixed: fp.acquisitionFeesFixed ?? undefined,
-    acquisitionFeesLump:  fp.acquisitionFeesLump  ?? undefined,
+    acquisitionFeesPct:   fp.acquisitionFeesPct   ?? undefined,
+    acquisitionFeesFixed: fp.acquisitionFeesFixed  ?? undefined,
+    acquisitionFeesLump:  fp.acquisitionFeesLump   ?? undefined,
+    brokerCommissionPct:  fp.brokerCommissionPct   ?? undefined,
     costItems,
     rateModel,
     dayCount:             fp.dayCount     || 'ACT/360',

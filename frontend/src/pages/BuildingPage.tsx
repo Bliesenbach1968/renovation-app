@@ -19,6 +19,7 @@ const ROOM_TYPE_LABELS: Record<string, string> = {
   elevator: 'Aufzug', garage: 'Garage', basement: 'Keller',
   technicalRoom: 'Technikraum', balcony: 'Balkon', terrace: 'Terrasse',
   garden: 'Garten/Außenbereich', rooftop: 'Dach', other: 'Sonstiges',
+  office: 'Arbeitszimmer', kidsRoom: 'Kinderzimmer', storageRoom: 'Abstellraum',
 };
 
 const LEVEL_NAMES: Record<number, string> = {
@@ -735,11 +736,15 @@ function EditUnitModal({ projectId, unit, floors, onClose }: { projectId: string
   );
 }
 
-function AddRoomModal({ projectId, floorId, unitId, onClose }: {
-  projectId: string; floorId: string; unitId?: string; onClose: () => void;
+const ROOM_TYPES_RENOVATION = ['livingRoom', 'bedroom', 'bathroom', 'kitchen', 'hallway', 'office', 'kidsRoom', 'storageRoom', 'other'];
+
+function AddRoomModal({ projectId, floorId, unitId, phase, onClose }: {
+  projectId: string; floorId: string; unitId?: string; phase?: string; onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: '', type: 'other', length: '', width: '', height: '' });
+  const allowedTypes = phase === 'renovation' ? ROOM_TYPES_RENOVATION : Object.keys(ROOM_TYPE_LABELS);
+  const defaultType = allowedTypes[0];
+  const [form, setForm] = useState({ name: '', type: defaultType, length: '', width: '', height: '' });
   const mutation = useMutation(() => createRoom(projectId, {
     floorId,
     unitId: unitId || undefined,
@@ -764,7 +769,7 @@ function AddRoomModal({ projectId, floorId, unitId, onClose }: {
           <div>
             <label className="label">Raumtyp</label>
             <select value={form.type} onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))} className="input">
-              {Object.entries(ROOM_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {allowedTypes.map(k => <option key={k} value={k}>{ROOM_TYPE_LABELS[k as keyof typeof ROOM_TYPE_LABELS]}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -990,7 +995,7 @@ export default function BuildingPage() {
   const sortedFloors = [...floors]
     .filter(f => selectedPhase === 'specialConstruction'
       ? f.phaseType === 'specialConstruction'
-      : f.phaseType !== 'specialConstruction')
+      : true)
     .sort((a, b) => a.level - b.level);
 
   const allRoomsForPhase = useMemo(() => {
@@ -1020,6 +1025,19 @@ export default function BuildingPage() {
   const unitTotalArea = (unitId: string): number => {
     const total = roomsByUnit(unitId).reduce((sum, r) => sum + (r.dimensions?.area || 0), 0);
     return +total.toFixed(2);
+  };
+
+  const roomWallArea = (r: Room): number | null => {
+    const d = r.dimensions;
+    if (!d?.length || !d?.width || !d?.height) return null;
+    return +(2 * (d.length + d.width) * d.height).toFixed(2);
+  };
+
+  const unitWallArea = (unitId: string): number | null => {
+    const rs = roomsByUnit(unitId);
+    let total = 0; let hasAny = false;
+    for (const r of rs) { const w = roomWallArea(r as Room); if (w !== null) { total += w; hasAny = true; } }
+    return hasAny ? +total.toFixed(2) : null;
   };
 
   // ── DnD-Hilfsfunktionen ───────────────────────────────────────
@@ -1305,6 +1323,7 @@ export default function BuildingPage() {
                 const isDropTarget = draggedRoomId !== null && dropTargetKey === dropKey;
                 const isExpanded   = expandedUnits.has(unit._id);
                 const area         = unitTotalArea(unit._id);
+                const wallArea     = unitWallArea(unit._id);
 
                 return (
                   <div
@@ -1332,7 +1351,12 @@ export default function BuildingPage() {
                         <span className="text-xs text-gray-400">{unitRooms.length} Räume</span>
                         {area > 0 && (
                           <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            {area} m² gesamt
+                            Boden: {area} m²
+                          </span>
+                        )}
+                        {wallArea !== null && wallArea > 0 && (
+                          <span className="text-xs font-semibold bg-sky-100 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-full">
+                            Wände: {wallArea} m²
                           </span>
                         )}
                         {isDropTarget && (
@@ -1399,6 +1423,78 @@ export default function BuildingPage() {
           );
         })}
 
+        {/* ── Summen-Zeilen ── */}
+        {(() => {
+          // Only count units on floors currently visible (sortedFloors)
+          const visibleFloorIds = new Set(sortedFloors.map(f => f._id));
+          const allExistingUnits = (units as Unit[]).filter(u => {
+            const fid = typeof u.floorId === 'string' ? u.floorId : (u.floorId as Floor)._id;
+            return visibleFloorIds.has(fid);
+          });
+          const nonGarageUnits = allExistingUnits.filter(u => {
+            // A unit is a "garage unit" if ALL its rooms are of type garage
+            const rs = roomsByUnit(u._id) as Room[];
+            return rs.length === 0 || rs.some(r => r.type !== 'garage');
+          });
+          const allUnitRooms: Room[] = allExistingUnits.flatMap(u => roomsByUnit(u._id) as Room[]);
+          const nonGarageRooms = allUnitRooms.filter(r => r.type !== 'garage');
+          const garageRooms    = allUnitRooms.filter(r => r.type === 'garage');
+
+          const totalWohnungen = nonGarageUnits.length;
+
+          const totalBoden = +nonGarageRooms.reduce((s, r) => s + (r.dimensions?.area || 0), 0).toFixed(2);
+          let totalWaende: number | null = null;
+          for (const r of nonGarageRooms) {
+            const w = roomWallArea(r);
+            if (w !== null) { totalWaende = (totalWaende ?? 0) + w; }
+          }
+          if (totalWaende !== null) totalWaende = +totalWaende.toFixed(2);
+
+          const garageBoden = +garageRooms.reduce((s, r) => s + (r.dimensions?.area || 0), 0).toFixed(2);
+
+          return (
+            <>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Summe Wohnungen und Räume</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs bg-white border border-slate-200 rounded-full px-3 py-0.5 text-slate-700">
+                    <span className="font-semibold">{totalWohnungen}</span> Wohnungen
+                  </span>
+                  <span className="text-xs bg-white border border-slate-200 rounded-full px-3 py-0.5 text-slate-700">
+                    <span className="font-semibold">{nonGarageRooms.length}</span> Räume
+                  </span>
+                  {totalBoden > 0 && (
+                    <span className="text-xs bg-emerald-50 border border-emerald-200 rounded-full px-3 py-0.5 text-emerald-700 font-semibold">
+                      Boden: {totalBoden} m²
+                    </span>
+                  )}
+                  {totalWaende !== null && totalWaende > 0 && (
+                    <span className="text-xs bg-sky-50 border border-sky-200 rounded-full px-3 py-0.5 text-sky-700 font-semibold">
+                      Wände: {totalWaende} m²
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {garageRooms.length > 0 && (
+                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Summe Garagen</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs bg-white border border-slate-200 rounded-full px-3 py-0.5 text-slate-700">
+                      <span className="font-semibold">{garageRooms.length}</span> Garagen
+                    </span>
+                    {garageBoden > 0 && (
+                      <span className="text-xs bg-emerald-50 border border-emerald-200 rounded-full px-3 py-0.5 text-emerald-700 font-semibold">
+                        Boden: {garageBoden} m²
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
         <button onClick={() => setShowAddFloor(true)} className="btn-secondary w-full">+ Etage hinzufügen</button>
       </div>
 
@@ -1419,6 +1515,7 @@ export default function BuildingPage() {
           projectId={projectId!}
           floorId={addRoomTarget.floorId}
           unitId={addRoomTarget.unitId}
+          phase={selectedPhase}
           onClose={() => setAddRoomTarget(null)}
         />
       )}
@@ -1432,7 +1529,7 @@ export default function BuildingPage() {
           templates={templates as PositionTemplate[]}
           editPosition={editBereichPosition}
           initialTemplate={selectedTemplate}
-          defaultHourlyRate={45}
+          defaultHourlyRate={project?.settings?.defaultHourlyRate ?? 45}
           defaultBereich={formBereich || undefined}
           projectFloors={floors}
           projectUnits={units as Unit[]}

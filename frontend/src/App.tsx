@@ -21,6 +21,8 @@ import FinancePage from './pages/FinancePage';
 import DatevExportPage from './pages/DatevExportPage';
 import GaebPage from './pages/GaebPage';
 import ZusatzkostenPage from './pages/ZusatzkostenPage';
+import VertriebMaterialPage from './pages/VertriebMaterialPage';
+import MaterialbedarfPage from './pages/MaterialbedarfPage';
 import AbrisskotenPage from './pages/AbrisskotenPage';
 import BaukostenPage from './pages/BaukostenPage';
 
@@ -57,6 +59,8 @@ function AppRoutes() {
         <Route path="/projects/:id/abrisskosten"    element={<AbrisskotenPage />} />
         <Route path="/projects/:id/baukosten"       element={<BaukostenPage />} />
         <Route path="/projects/:id/module/:module"   element={<ZusatzkostenPage />} />
+        <Route path="/projects/:id/vertrieb-material" element={<VertriebMaterialPage />} />
+        <Route path="/projects/:id/materialbedarf"    element={<MaterialbedarfPage />} />
         <Route path="/projects/:id/datev"           element={<DatevExportPage />} />
         <Route path="/projects/:id/gaeb"           element={<GaebPage />} />
         <Route path="/admin/users"                  element={<AdminUsersPage />} />

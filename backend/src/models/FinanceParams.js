@@ -45,6 +45,8 @@ const financeParamsSchema = new mongoose.Schema({
   acquisitionFeesFixed: { type: Number, min: 0, default: null },
   /** Zusätzliche Pauschale in EUR (wird immer addiert) */
   acquisitionFeesLump: { type: Number, min: 0, default: null },
+  /** Maklercourtage als Prozentsatz vom Kaufpreis (z.B. 3.57 für 3,57 %) */
+  brokerCommissionPct: { type: Number, min: 0, max: 100, default: null },
 
   // ── Zinsmodell ────────────────────────────────────────────────────────
   rateModelType: {

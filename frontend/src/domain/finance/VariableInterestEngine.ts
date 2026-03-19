@@ -64,6 +64,8 @@ export interface FinanceEngineInput {
   acquisitionFeesPct?: number;
   /** Oder als Festbetrag */
   acquisitionFeesFixed?: number;
+  /** Maklercourtage als Prozentsatz vom Kaufpreis */
+  brokerCommissionPct?: number;
   costItems: CostItem[];
   rateModel: RateModel;
   dayCount?: DayCountConvention;
@@ -231,9 +233,11 @@ export function calculate(input: FinanceEngineInput): FinanceResult {
   if (purchasePrice < 0) throw new Error('purchasePrice muss ≥ 0 sein');
 
   const acquisitionDate = toDay(rawAcq);
-  const feesAmount = acquisitionFeesFixed != null
+  const baseFees = acquisitionFeesFixed != null
     ? acquisitionFeesFixed
     : (acquisitionFeesPct != null ? purchasePrice * acquisitionFeesPct / 100 : 0);
+  const brokerFees = input.brokerCommissionPct != null ? purchasePrice * input.brokerCommissionPct / 100 : 0;
+  const feesAmount = baseFees + brokerFees;
   const totalAcq = purchasePrice + feesAmount;
   const totalCosts = costItems.reduce((s, ci) => s + (ci.amount > 0 ? ci.amount : 0), 0);
 

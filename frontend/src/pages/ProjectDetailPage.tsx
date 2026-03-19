@@ -27,6 +27,8 @@ interface GebaeudekennzahlenForm {
   tiefgarage: boolean;
   tiefgarageStellplaetze: number;
   aussenanlagenVorhanden: boolean;
+  grundstueckFlaeche: number | null;
+  anzahlStellplaetze: number;
 }
 
 function GebaeudekennzahlenModal({ project, onClose }: { project: any; onClose: () => void }) {
@@ -40,6 +42,8 @@ function GebaeudekennzahlenModal({ project, onClose }: { project: any; onClose: 
       tiefgarage:             project.tiefgarage             ?? false,
       tiefgarageStellplaetze: project.tiefgarageStellplaetze ?? 0,
       aussenanlagenVorhanden: project.aussenanlagenVorhanden ?? false,
+      grundstueckFlaeche:     project.grundstueckFlaeche     ?? null,
+      anzahlStellplaetze:     project.anzahlStellplaetze     ?? 0,
     },
   });
   const tiefgarage = useWatch({ control, name: 'tiefgarage' });
@@ -53,6 +57,8 @@ function GebaeudekennzahlenModal({ project, onClose }: { project: any; onClose: 
       tiefgarage:             !!data.tiefgarage,
       tiefgarageStellplaetze: data.tiefgarage ? (+data.tiefgarageStellplaetze || 0) : 0,
       aussenanlagenVorhanden: !!data.aussenanlagenVorhanden,
+      grundstueckFlaeche:     data.grundstueckFlaeche !== null && data.grundstueckFlaeche !== undefined && String(data.grundstueckFlaeche) !== '' ? +data.grundstueckFlaeche : null,
+      anzahlStellplaetze:     +data.anzahlStellplaetze || 0,
     } as any),
     {
       onSuccess: () => {
@@ -107,10 +113,127 @@ function GebaeudekennzahlenModal({ project, onClose }: { project: any; onClose: 
             <span className="label mb-0">Außenanlagen vorhanden</span>
           </label>
 
+          <div>
+            <label className="label">Grundstück (m²)</label>
+            <input
+              {...register('grundstueckFlaeche', { setValueAs: v => v === '' ? null : +v })}
+              type="number" min={0} step={0.01}
+              className="input"
+              placeholder="z.B. 520"
+            />
+          </div>
+
+          <div>
+            <label className="label">Anzahl Stellplätze</label>
+            <input {...register('anzahlStellplaetze', { valueAsNumber: true })} type="number" min={0} className="input" placeholder="z.B. 8" />
+          </div>
+
           {mutation.isError && (
             <p className="text-xs text-red-600">{(mutation.error as any)?.response?.data?.message || 'Fehler beim Speichern'}</p>
           )}
 
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={mutation.isLoading} className="btn-primary">
+              {mutation.isLoading ? 'Speichern…' : 'Speichern'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AuftraggeberModal({ project, onClose }: { project: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { register, handleSubmit } = useForm({
+    defaultValues: {
+      'client.name':    project.client?.name    ?? '',
+      'client.company': project.client?.company ?? '',
+      'client.phone':   project.client?.phone   ?? '',
+      'client.email':   project.client?.email   ?? '',
+    },
+  });
+  const mutation = useMutation(
+    (data: any) => updateProject(project._id, {
+      client: {
+        name:    data['client.name'],
+        company: data['client.company'],
+        phone:   data['client.phone'],
+        email:   data['client.email'],
+      },
+    } as any),
+    { onSuccess: () => { qc.invalidateQueries(['project', project._id]); onClose(); } }
+  );
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <h3 className="font-semibold text-lg mb-4">Auftraggeber bearbeiten</h3>
+        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3">
+          <div>
+            <label className="label">Name</label>
+            <input {...register('client.name')} className="input" placeholder="Max Mustermann" />
+          </div>
+          <div>
+            <label className="label">Firma</label>
+            <input {...register('client.company')} className="input" placeholder="Musterfirma GmbH" />
+          </div>
+          <div>
+            <label className="label">Telefon</label>
+            <input {...register('client.phone')} className="input" placeholder="+49 123 456789" />
+          </div>
+          <div>
+            <label className="label">E-Mail</label>
+            <input {...register('client.email')} type="email" className="input" placeholder="kontakt@firma.de" />
+          </div>
+          {mutation.isError && (
+            <p className="text-xs text-red-600">{(mutation.error as any)?.response?.data?.message || 'Fehler beim Speichern'}</p>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={mutation.isLoading} className="btn-primary">
+              {mutation.isLoading ? 'Speichern…' : 'Speichern'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EinstellungenModal({ project, onClose }: { project: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { register, handleSubmit } = useForm({
+    defaultValues: {
+      defaultHourlyRate:       project.settings?.defaultHourlyRate       ?? 45,
+      defaultEstrichThickness: project.settings?.defaultEstrichThickness ?? 45,
+    },
+  });
+  const mutation = useMutation(
+    (data: any) => updateProject(project._id, {
+      settings: {
+        defaultHourlyRate:       +data.defaultHourlyRate       || 45,
+        defaultEstrichThickness: +data.defaultEstrichThickness || 45,
+      },
+    } as any),
+    { onSuccess: () => { qc.invalidateQueries(['project', project._id]); onClose(); } }
+  );
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <h3 className="font-semibold text-lg mb-4">Einstellungen bearbeiten</h3>
+        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3">
+          <div>
+            <label className="label">Standard-Stundensatz (€/Std)</label>
+            <input {...register('defaultHourlyRate', { valueAsNumber: true })} type="number" min={0} step={0.01} className="input" />
+          </div>
+          <div>
+            <label className="label">Estrich-Standard (mm)</label>
+            <input {...register('defaultEstrichThickness', { valueAsNumber: true })} type="number" min={0} className="input" />
+          </div>
+          {mutation.isError && (
+            <p className="text-xs text-red-600">{(mutation.error as any)?.response?.data?.message || 'Fehler beim Speichern'}</p>
+          )}
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={mutation.isLoading} className="btn-primary">
               {mutation.isLoading ? 'Speichern…' : 'Speichern'}
@@ -135,6 +258,8 @@ export default function ProjectDetailPage() {
   const qc = useQueryClient();
   const { data: project, isLoading } = useQuery(['project', id], () => getProject(id!));
   const [showEditKennzahlen, setShowEditKennzahlen] = useState(false);
+  const [showEditAuftraggeber, setShowEditAuftraggeber] = useState(false);
+  const [showEditEinstellungen, setShowEditEinstellungen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [confirmPhase, setConfirmPhase] = useState<{
     phaseId: string;
@@ -192,7 +317,9 @@ export default function ProjectDetailPage() {
     || (project.etagenOhneKeller ?? 0) > 0
     || (project.kellerAnzahl ?? 0) > 0
     || project.tiefgarage
-    || project.aussenanlagenVorhanden;
+    || project.aussenanlagenVorhanden
+    || (project.grundstueckFlaeche ?? 0) > 0
+    || (project.anzahlStellplaetze ?? 0) > 0;
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -231,7 +358,7 @@ export default function ProjectDetailPage() {
             ),
           },
           {
-            label: 'Gebäude & Renovierung',
+            label: 'Gebäude & Räume',
             to: `/projects/${id}/building?phase=renovation`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
@@ -323,7 +450,7 @@ export default function ProjectDetailPage() {
             ),
           },
           {
-            label: 'Vertrieb',
+            label: 'Vertriebskosten',
             to: `/projects/${id}/module/vertrieb`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
@@ -333,6 +460,40 @@ export default function ProjectDetailPage() {
                 <path d="M30 54 C30 42 58 42 58 54" fill="currentColor"/>
                 <rect x="29" y="19" width="6" height="6" rx="1" fill="white"/>
                 <path d="M28 22 L36 22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Vertrieb',
+            to: `/projects/${id}/vertrieb-material`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="4" y="8" width="36" height="48" rx="3"/>
+                <rect x="10" y="16" width="24" height="4" rx="1" fill="white"/>
+                <rect x="10" y="24" width="18" height="4" rx="1" fill="white"/>
+                <rect x="10" y="32" width="24" height="4" rx="1" fill="white"/>
+                <rect x="10" y="40" width="14" height="4" rx="1" fill="white"/>
+                <circle cx="48" cy="42" r="13" fill="currentColor" stroke="white" strokeWidth="2"/>
+                <rect x="44" y="36" width="8" height="12" rx="1" fill="white"/>
+                <rect x="42" y="42" width="12" height="4" rx="1" fill="currentColor"/>
+                <circle cx="44" cy="56" r="3" fill="white"/>
+                <circle cx="54" cy="56" r="3" fill="white"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Materialbedarf',
+            to: `/projects/${id}/materialbedarf`,
+            icon: (
+              <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
+                <rect x="8" y="4" width="48" height="56" rx="3"/>
+                <rect x="14" y="14" width="12" height="12" rx="1" fill="white"/>
+                <rect x="30" y="16" width="18" height="4" rx="1" fill="white"/>
+                <rect x="30" y="22" width="12" height="3" rx="1" fill="white" opacity="0.6"/>
+                <rect x="14" y="32" width="12" height="12" rx="1" fill="white"/>
+                <rect x="30" y="34" width="18" height="4" rx="1" fill="white"/>
+                <rect x="30" y="40" width="12" height="3" rx="1" fill="white" opacity="0.6"/>
+                <rect x="14" y="50" width="36" height="4" rx="1" fill="white" opacity="0.5"/>
               </svg>
             ),
           },
@@ -437,14 +598,31 @@ export default function ProjectDetailPage() {
 
         {/* Info-Panel */}
         <div className="space-y-4">
-          {project.client?.name && (
-            <div className="card">
-              <h3 className="font-medium text-gray-900 mb-2">Auftraggeber</h3>
-              <p className="text-sm text-gray-700">{project.client.company || project.client.name}</p>
-              {project.client.phone && <p className="text-xs text-gray-500 mt-1">{project.client.phone}</p>}
-              {project.client.email && <p className="text-xs text-gray-500">{project.client.email}</p>}
+          <div className="card">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-gray-900">Auftraggeber</h3>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowEditAuftraggeber(true)}
+                  className="text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded px-2 py-0.5 hover:bg-primary-50 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+              )}
             </div>
-          )}
+            {project.client?.name ? (
+              <div className="text-sm text-gray-600 space-y-0.5">
+                {project.client.company && <p className="font-medium text-gray-800">{project.client.company}</p>}
+                <p>{project.client.name}</p>
+                {project.client.phone && <p className="text-xs text-gray-500">{project.client.phone}</p>}
+                {project.client.email && <p className="text-xs text-gray-500">{project.client.email}</p>}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">Noch kein Auftraggeber –
+                {isAdmin && <button onClick={() => setShowEditAuftraggeber(true)} className="ml-1 text-primary-600 hover:underline">jetzt erfassen</button>}
+              </p>
+            )}
+          </div>
 
           {/* Gebäudekennzahlen */}
           <div className="card">
@@ -469,6 +647,8 @@ export default function ProjectDetailPage() {
                   </span></p>
                 )}
                 {project.aussenanlagenVorhanden && <p>Außenanlagen: <span className="font-medium text-gray-800">Ja</span></p>}
+                <p>Grundstück: <span className="font-medium text-gray-800">{(project.grundstueckFlaeche ?? 0) > 0 ? `${project.grundstueckFlaeche} m²` : '–'}</span></p>
+                <p>Stellplätze: <span className="font-medium text-gray-800">{project.anzahlStellplaetze ?? 0}</span></p>
               </div>
             ) : (
               <p className="text-xs text-gray-400">Noch keine Kennzahlen eingetragen –
@@ -562,10 +742,20 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="card">
-            <h3 className="font-medium text-gray-900 mb-2">Einstellungen</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-gray-900">Einstellungen</h3>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowEditEinstellungen(true)}
+                  className="text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded px-2 py-0.5 hover:bg-primary-50 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+              )}
+            </div>
             <div className="text-sm text-gray-600 space-y-1">
-              <p>Stundensatz: {project.settings.defaultHourlyRate} €/Std</p>
-              <p>Estrich-Standard: {project.settings.defaultEstrichThickness} mm</p>
+              <p>Stundensatz: <span className="font-medium text-gray-800">{project.settings?.defaultHourlyRate ?? 45} €/Std</span></p>
+              <p>Estrich-Standard: <span className="font-medium text-gray-800">{project.settings?.defaultEstrichThickness ?? 45} mm</span></p>
             </div>
           </div>
         </div>
@@ -573,6 +763,14 @@ export default function ProjectDetailPage() {
 
       {showEditKennzahlen && (
         <GebaeudekennzahlenModal project={project} onClose={() => setShowEditKennzahlen(false)} />
+      )}
+
+      {showEditAuftraggeber && (
+        <AuftraggeberModal project={project} onClose={() => setShowEditAuftraggeber(false)} />
+      )}
+
+      {showEditEinstellungen && (
+        <EinstellungenModal project={project} onClose={() => setShowEditEinstellungen(false)} />
       )}
 
       {/* Bestätigungs-Dialog für Phasenstatus-Änderung */}

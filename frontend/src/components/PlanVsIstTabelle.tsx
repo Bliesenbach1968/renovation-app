@@ -7,7 +7,7 @@ const PHASE_NAMES: Record<PhaseType, string> = {
   baunebenkosten: 'Baunebenkosten',
   planungskosten: 'Planungskosten',
   ausstellung: 'Ausstattung',
-  vertrieb: 'Vertrieb',
+  vertrieb: 'Vertriebskosten',
 };
 const PHASE_ORDER: PhaseType[] = ['demolition', 'renovation', 'specialConstruction'];
 
