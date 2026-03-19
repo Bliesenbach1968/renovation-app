@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type ExcelJSType from 'exceljs';
-import { getProject, getProjectSummary, getRooms, frierePlanwerteEin, loeschePlanwerte } from '../api/projects';
+import { getProject, getProjectSummary, getRooms, getUnits, frierePlanwerteEin, loeschePlanwerte } from '../api/projects';
 import { getFinanceSummary } from '../api/finance';
 import type { ProjectSummary, Project, BereichVergleichRow, PhaseType } from '../types';
 import type { FinanceSummary } from '../domain/finance/VariableInterestEngine';
@@ -414,7 +414,447 @@ const XLSX_PHASE_COLORS: Record<string, string> = {
   vertrieb:            '0F766E',
 };
 
-async function downloadExcel(project: Project, summary: ProjectSummary) {
+// ─── GIK (2) helpers (adapted from provided code) ────────────────────────────
+
+type GIKUnit = { type: 'WE' | 'DG'; weCode?: string; title: string; rooms: { name: string; area: number | null }[] };
+
+function gikWeSorter(a: string, b: string) {
+  const norm = (s: string) => s.replace(/^WE\s*/i, '');
+  const pa = norm(a).match(/^(\d+)([A-Za-z]*)$/);
+  const pb = norm(b).match(/^(\d+)([A-Za-z]*)$/);
+  if (pa && pb) {
+    const na = parseInt(pa[1], 10), nb = parseInt(pb[1], 10);
+    if (na !== nb) return na - nb;
+    return (pa[2] || '').localeCompare(pb[2] || '', 'de', { sensitivity: 'base' });
+  }
+  return a.localeCompare(b, 'de', { sensitivity: 'base' });
+}
+
+function buildGIKUnits(units: import('../types').Unit[], rooms: import('../types').Room[]): GIKUnit[] {
+  const result: GIKUnit[] = [];
+  for (const u of units) {
+    const name  = u.name ?? '';
+    const num   = u.number ?? '';
+    const weM   = (num + ' ' + name).toUpperCase().match(/\b(WE\d+[A-Z]?)\b/);
+    const isDG  = /(^|\s)(dachgeschoss|dachgeschoß|dg)(\s|$)/i.test(name) || /(^|\s)(dachgeschoss|dachgeschoß|dg)(\s|$)/i.test(num);
+
+    const unitRooms = rooms.filter(r => {
+      if (!r.unitId) return false;
+      const uid = typeof r.unitId === 'string' ? r.unitId : (r.unitId as import('../types').Unit)._id;
+      return uid === u._id;
+    }).map(r => ({ name: r.name, area: r.dimensions?.area ?? null }));
+
+    if (weM) {
+      result.push({ type: isDG ? 'DG' : 'WE', weCode: weM[1], title: name, rooms: unitRooms });
+    } else if (isDG) {
+      result.push({ type: 'DG', title: 'Dachgeschoss', rooms: unitRooms });
+    }
+  }
+  return result;
+}
+
+function addGIKSheet(wb: ExcelJSType.Workbook, units: import('../types').Unit[], rooms: import('../types').Room[], stellplaetze: number) {
+  const ws = wb.addWorksheet('GIK (2)', {
+    properties: { defaultColWidth: 12 },
+    pageSetup: { paperSize: 9, orientation: 'portrait' as const },
+  });
+
+  const HEADER_BG = 'FFEFEFEF';
+  const BORDER_C  = 'FFBFBFBF';
+  const HAIR_C    = 'FFDDDDDD';
+
+  function sectionHeader(row: ExcelJSType.Row, label: string) {
+    row.height = 20;
+    const c = row.getCell(1);
+    c.value = label;
+    c.font  = { bold: true, size: 11 };
+  }
+  function colHeader(row: ExcelJSType.Row, cols: string[]) {
+    row.height = 18;
+    cols.forEach((txt, i) => {
+      const c = row.getCell(i + 1);
+      c.value = txt;
+      c.font  = { bold: true, size: 9 };
+      c.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      c.alignment = { vertical: 'middle', horizontal: 'left' };
+      c.border = { top: { style: 'thin', color: { argb: BORDER_C } }, bottom: { style: 'thin', color: { argb: BORDER_C } }, left: { style: 'thin', color: { argb: BORDER_C } }, right: { style: 'thin', color: { argb: BORDER_C } } };
+    });
+  }
+  function dataRow(row: ExcelJSType.Row, vals: (string | number | null)[]) {
+    row.height = 16;
+    vals.forEach((v, i) => {
+      const c = row.getCell(i + 1);
+      c.value = v as ExcelJSType.CellValue;
+      c.font  = { size: 9 };
+      c.border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
+      if (i === 2 && typeof v === 'number') { c.numFmt = '0,00 "m²"'; }
+      if (i === 4 || i === 5 || i === 3) { c.numFmt = '#,##0.00 "€"'; }
+    });
+  }
+
+  ws.columns = [
+    { width: 15 }, { width: 28 }, { width: 36 }, { width: 10 }, { width: 14 }, { width: 16 },
+  ];
+
+  // ── WE + DG section ──────────────────────────────────────────────────────
+  ws.addRow([]).height = 6;
+  sectionHeader(ws.addRow([]), 'Erlöse WE + GE');
+  colHeader(ws.addRow([]), ['WE Nr.', 'WE Bezeichnung', 'Fläche in m² (Boden)', 'Zimmer', '€/m²', 'Erlös pro WE in €']);
+
+  const gikUnits = buildGIKUnits(units, rooms);
+  const wes = gikUnits.filter(u => u.type === 'WE').sort((a, b) => gikWeSorter(a.weCode ?? '', b.weCode ?? ''));
+  const dgs = gikUnits.filter(u => u.type === 'DG');
+
+  for (const u of wes) {
+    const totalArea = +u.rooms.reduce((s, r) => s + (r.area ?? 0), 0).toFixed(2);
+    dataRow(ws.addRow([]), [u.weCode ?? 'WE', u.title, totalArea, u.rooms.length, null, null]);
+  }
+  for (const u of dgs) {
+    const totalArea = +u.rooms.reduce((s, r) => s + (r.area ?? 0), 0).toFixed(2);
+    dataRow(ws.addRow([]), ['Dachgeschoss', 'Dachgeschoss', totalArea, u.rooms.length, null, null]);
+  }
+
+  // ── Stellplätze section ───────────────────────────────────────────────────
+  ws.addRow([]).height = 8;
+  sectionHeader(ws.addRow([]), 'Erlöse Stellplätze');
+  colHeader(ws.addRow([]), ['Anzahl', 'SP Bezeichnung', '', 'Erlöse (Stück) in €']);
+
+  const spRow = ws.addRow([]);
+  spRow.height = 16;
+  spRow.getCell(1).value  = stellplaetze;
+  spRow.getCell(2).value  = 'Stellplätze';
+  spRow.getCell(4).value  = null;
+  spRow.getCell(4).numFmt = '#,##0.00 "€"';
+  [1, 2, 3, 4].forEach(i => {
+    spRow.getCell(i).font   = { size: 9 };
+    spRow.getCell(i).border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
+  });
+}
+
+// ─── GIK (1) – Gesamtinvestitionskosten ────────────────────────────────────────
+function addGIK1Sheet(
+  wb: ExcelJSType.Workbook,
+  project: Project,
+  summary: ProjectSummary,
+  allUnits: import('../types').Unit[],
+  allRooms: import('../types').Room[],
+  financeSummary: FinanceSummary | null,
+) {
+  const ws = wb.addWorksheet('GIK (1)', {
+    properties: { defaultColWidth: 16 },
+    pageSetup: { paperSize: 9, orientation: 'landscape' as const },
+  });
+
+  ws.columns = [
+    { width: 10 },  // A: pos# / WE Nr. / Anzahl
+    { width: 35 },  // B: label / WE Bezeichnung
+    { width: 18 },  // C: value / Kosten brutto / Fläche m²
+    { width: 14 },  // D: €/m² Wfl. / Zimmer
+    { width: 14 },  // E: €/m² Erlöse
+    { width: 18 },  // F: Erlös WE / Erlös gesamt
+    { width: 55 },  // G: notes (Kennzahlen section)
+  ];
+
+  const DARK_BG   = 'FF1E3A5F';
+  const LIGHT_ROW = 'FFF0F4FA';
+  const NOTE_C    = 'FF888888';
+  const INPUT_BG  = 'FFFFF9C4';
+  const BORDER_C  = 'FFBFBFBF';
+  const HAIR_C    = 'FFDDDDDD';
+  const EUR_FMT   = '#,##0.00 "€"';
+
+  function fillDark(cell: ExcelJSType.Cell, bold = false, size = 9) {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } };
+    cell.font = { bold, size, color: { argb: 'FFFFFFFF' } };
+  }
+
+  function formatMonthYear(d: string | null | undefined): string {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return '';
+    return dt.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
+  }
+
+  // ── Computed values ─────────────────────────────────────────────────────────
+  const wohnflaeche   = +allRooms.reduce((s, r) => s + (r.dimensions?.area ?? 0), 0).toFixed(2);
+  const phaseByType   = (type: string) => project.phases.find(p => p.type === type);
+  const perM2         = (cost: number | null): number | null =>
+    cost !== null && wohnflaeche > 0 ? +(cost / wohnflaeche).toFixed(2) : null;
+
+  const demolitionCost  = summary.phases.demolition?.subtotal          ?? 0;
+  const renovationCost  = summary.phases.renovation?.subtotal          ?? 0;
+  const specialCost     = summary.phases.specialConstruction?.subtotal  ?? 0;
+  const ausstattungCost = summary.phases.ausstellung?.subtotal          ?? 0;
+  const planungCost     = summary.phases.planungskosten?.subtotal       ?? 0;
+  const baunebenCost    = summary.phases.baunebenkosten?.subtotal       ?? 0;
+  const vertriebCost    = summary.phases.vertrieb?.subtotal             ?? 0;
+  const finanzCost: number | null      = financeSummary?.totalInterest    ?? null;
+  const grundstueckCost: number | null = financeSummary?.totalAcquisition ?? null;
+
+  // Vertrieb prices from localStorage
+  let vPrices: Record<string, { preisQm: string; festpreis: string }> = {};
+  try {
+    const raw = typeof localStorage !== 'undefined'
+      ? localStorage.getItem(`vertrieb_prices_${project._id}`) : null;
+    if (raw) vPrices = JSON.parse(raw) as typeof vPrices;
+  } catch { /* ignore */ }
+
+  function parseGerman(s: string): number | null {
+    if (!s?.trim()) return null;
+    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+  }
+
+  // ── SECTION A: Gebäudekennzahlen ─────────────────────────────────────────
+  ws.addRow([]).height = 4;
+  ws.addRow([]).height = 4;
+  ws.addRow([]).height = 4;
+
+  const kRows: Array<{ label: string; value: number | string | null; note: string; manual?: boolean }> = [
+    { label: 'Grundstück',                       value: project.grundstueckFlaeche ?? null,      note: 'Manuell eintragen oder aus "Gebäudekennzahlen" "Grundstück" xxxx m² hinzufügen' },
+    { label: 'GRZ (Grundflächenzahl)',            value: null,                                    note: 'bei Gebäudekennzahlen eintragen (OPTIONAL)', manual: true },
+    { label: 'BGF o.i. (Bruttogeschossfläche)',   value: null,                                    note: 'Manuell eintragen', manual: true },
+    { label: 'Wohnfläche (Nutzfläche)',           value: wohnflaeche > 0 ? wohnflaeche : null,   note: 'Summe Fläche Wohnungen + Gewerbe' },
+    { label: 'Wohneinheiten',                     value: project.anzahlWohnungen    ?? 0,         note: 'Siehe "Gebäudekennzahlen"' },
+    { label: 'Gewerbeeinheiten',                  value: project.anzahlGewerbe      ?? 0,         note: 'Siehe "Gebäudekennzahlen"' },
+    { label: 'PKW Stellplätze',                   value: project.anzahlStellplaetze ?? 0,         note: 'Siehe "Gebäudekennzahlen"' },
+    { label: '(Außenanlage)',                     value: null,                                    note: 'Grundstücksfläche minus Grundstücksfläche * GRZ', manual: true },
+  ];
+
+  for (const k of kRows) {
+    const row = ws.addRow([]); row.height = 18;
+    row.getCell(2).value     = k.label;
+    row.getCell(2).font      = { size: 9 };
+    row.getCell(2).alignment = { vertical: 'middle' };
+    row.getCell(3).value     = k.value;
+    row.getCell(3).font      = { size: 9, bold: k.value !== null && !k.manual } as ExcelJSType.Font;
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'right' };
+    if (k.manual) {
+      row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+    }
+    row.getCell(7).value     = k.note;
+    row.getCell(7).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
+    row.getCell(7).alignment = { vertical: 'middle' };
+  }
+
+  ws.addRow([]).height = 6;
+
+  // Timeline dates
+  const demoPhase = phaseByType('demolition');
+  const renoPhase = phaseByType('renovation');
+  const dateRows = [
+    { label: 'Closing',            d: formatMonthYear(project.timeline?.plannedStart) },
+    { label: 'Beginn Abbruch',     d: formatMonthYear(demoPhase?.timeline?.plannedStart) },
+    { label: 'Beginn Innenausbau', d: formatMonthYear(renoPhase?.timeline?.plannedStart) },
+    { label: 'Fertigstellung',     d: formatMonthYear(project.timeline?.plannedEnd) },
+  ];
+  for (const dr of dateRows) {
+    const row = ws.addRow([]); row.height = 16;
+    row.getCell(2).value     = dr.label;
+    row.getCell(2).font      = { size: 9 };
+    row.getCell(2).alignment = { vertical: 'middle' };
+    row.getCell(3).value     = dr.d || null;
+    row.getCell(3).font      = { size: 9 };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+    if (!dr.d) row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+  }
+
+  ws.addRow([]).height = 10;
+  ws.addRow([]).height = 10;
+
+  // ── SECTION B: Gesamtinvestitionskosten ──────────────────────────────────
+  const hRow = ws.addRow([]); hRow.height = 22;
+  fillDark(hRow.getCell(1));
+  fillDark(hRow.getCell(2), true, 10);
+  fillDark(hRow.getCell(3), true, 9);
+  fillDark(hRow.getCell(4), true, 9);
+  hRow.getCell(2).value     = 'Gesamtinvestitionskosten';
+  hRow.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+  hRow.getCell(3).value     = 'Kosten brutto';
+  hRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'right' };
+  hRow.getCell(4).value     = '€/m² Wfl.';
+  hRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+
+  const positions: Array<{ nr: number; label: string; note: string; cost: number | null; manual?: boolean }> = [
+    { nr: 1, label: 'Grundstück',                                         note: 'Manuell eintragen oder aus "Gebäudekennzahlen" "Grundstück" xxxx m² hinzufügen',   cost: grundstueckCost, manual: grundstueckCost === null },
+    { nr: 2, label: 'Abriss / vorbereitende Maßnahmen',                   note: 'Gleich den Kostenpositionen Entkernung',                                           cost: demolitionCost },
+    { nr: 3, label: 'Baukosten [Renovierung + Sonderarbeiten] [Auск.]',   note: 'Summe Renovierung + Sonderarbeiten aus der Kostenkalkulation',                     cost: renovationCost + specialCost },
+    { nr: 4, label: 'Ausstattung',                                        note: 'pauschale Positionen hinzufügen (z.B. Einbauküche, Badezimmerschränke)',           cost: ausstattungCost },
+    { nr: 5, label: 'Planung',                                            note: 'pauschale Positionen hinzufügen (z.B. Architekten, Vermesser, etc.)',              cost: planungCost },
+    { nr: 6, label: 'Baunebenkosten',                                     note: 'pauschale Positionen hinzufügen (z.B. Versicherung, Strom, Sicherheit..., etc.)', cost: baunebenCost },
+    { nr: 7, label: 'Finanzierung',                                       note: 'wie in Kalkulation (Zinsen)',                                                      cost: finanzCost,     manual: finanzCost === null },
+    { nr: 8, label: 'Vertrieb',                                           note: 'pauschale Positionen hinzufügen (z.B. Makler, Vertriebstools, Fee Mitarbeiter)',   cost: vertriebCost },
+  ];
+
+  for (const pos of positions) {
+    const row = ws.addRow([]); row.height = 20;
+    row.getCell(1).value     = pos.nr;
+    row.getCell(1).font      = { bold: true, size: 9, color: { argb: 'FFFFFFFF' } };
+    row.getCell(1).fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BG } };
+    row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    row.getCell(2).value     = pos.label;
+    row.getCell(2).font      = { bold: true, size: 9 };
+    row.getCell(2).fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } };
+    row.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+
+    row.getCell(3).value     = pos.cost;
+    row.getCell(3).numFmt    = EUR_FMT;
+    row.getCell(3).font      = { bold: true, size: 9 };
+    row.getCell(3).fill      = pos.manual
+      ? { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } }
+      : { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'right' };
+
+    row.getCell(4).value     = perM2(pos.cost);
+    row.getCell(4).numFmt    = EUR_FMT;
+    row.getCell(4).font      = { size: 9 };
+    row.getCell(4).fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } };
+    row.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+
+    const noteRow = ws.addRow([]); noteRow.height = 14;
+    noteRow.getCell(2).value     = pos.note;
+    noteRow.getCell(2).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
+    noteRow.getCell(2).alignment = { vertical: 'middle', indent: 2 };
+  }
+
+  // Total row
+  const knownTotal = positions.filter(p => p.cost !== null).reduce((s, p) => s + (p.cost ?? 0), 0);
+  const tRow = ws.addRow([]); tRow.height = 24;
+  fillDark(tRow.getCell(1));
+  fillDark(tRow.getCell(2), true, 10);
+  fillDark(tRow.getCell(3), true, 10);
+  fillDark(tRow.getCell(4), true, 10);
+  tRow.getCell(2).value     = 'Gesamtinvestitionskosten';
+  tRow.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+  tRow.getCell(3).value     = knownTotal || null;
+  tRow.getCell(3).numFmt    = EUR_FMT;
+  tRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'right' };
+  tRow.getCell(4).value     = perM2(knownTotal || null);
+  tRow.getCell(4).numFmt    = EUR_FMT;
+  tRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+
+  // ── SECTION C: Erlöse WE + GE ────────────────────────────────────────────
+  ws.addRow([]).height = 14;
+  ws.addRow([]).height = 4;
+
+  const erlSH = ws.addRow([]); erlSH.height = 22;
+  erlSH.getCell(1).value     = 'Erlöse WE + GE';
+  erlSH.getCell(1).font      = { bold: true, size: 11 };
+  erlSH.getCell(1).alignment = { vertical: 'middle' };
+  ws.mergeCells(erlSH.number, 1, erlSH.number, 6);
+
+  ws.addRow([]).height = 4;
+
+  const erlColH = ['WE Nr.', 'WE Bezeichnung', 'Fläche in m² aus "Gebäude & Räume"', 'Zimmer', '€/m²', 'Erlös WE'];
+  const erlHRow = ws.addRow([]); erlHRow.height = 20;
+  erlColH.forEach((txt, i) => {
+    const c = erlHRow.getCell(i + 1);
+    c.value     = txt;
+    c.font      = { bold: true, size: 9 };
+    c.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } };
+    c.alignment = { vertical: 'middle', horizontal: i >= 2 ? 'right' : 'left' };
+    c.border    = { bottom: { style: 'thin', color: { argb: BORDER_C } } };
+  });
+
+  // Build sorted WE/DG list (reuses helpers from GIK (2) section)
+  const gikList   = buildGIKUnits(allUnits, allRooms);
+  const sortedWEs = gikList.filter(u => u.type === 'WE').sort((a, b) => gikWeSorter(a.weCode ?? '', b.weCode ?? ''));
+  const sortedDGs = gikList.filter(u => u.type === 'DG');
+
+  let totalErlArea  = 0;
+  let totalErloes   = 0;
+
+  for (const giku of [...sortedWEs, ...sortedDGs]) {
+    const priceKey  = giku.weCode ?? 'Dachgeschoss';
+    const p         = vPrices[priceKey] ?? { preisQm: '', festpreis: '' };
+    const preisQm   = parseGerman(p.preisQm);
+    const festpreis = parseGerman(p.festpreis);
+    const unitArea  = +giku.rooms.reduce((s, r) => s + (r.area ?? 0), 0).toFixed(2);
+    const erloes    = festpreis ?? (preisQm !== null && unitArea > 0 ? +(preisQm * unitArea).toFixed(2) : null);
+    const zimmer    = giku.rooms.length;
+
+    totalErlArea  += unitArea;
+    totalErloes   += erloes ?? 0;
+
+    const row = ws.addRow([]); row.height = 16;
+    row.getCell(1).value  = giku.type === 'DG' ? 'Dachgeschoss' : (giku.weCode ?? '');
+    row.getCell(2).value  = giku.title;
+    row.getCell(3).value  = unitArea || null;
+    row.getCell(3).numFmt = '#,##0.00 "m²"';
+    row.getCell(4).value  = zimmer || null;
+    row.getCell(5).value  = preisQm;
+    row.getCell(5).numFmt = EUR_FMT;
+    if (preisQm === null && !festpreis) {
+      row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+    }
+    row.getCell(6).value  = erloes;
+    row.getCell(6).numFmt = EUR_FMT;
+    if (erloes === null) {
+      row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+    }
+    [1, 2, 3, 4, 5, 6].forEach(i => {
+      row.getCell(i).font   = { size: 9 };
+      row.getCell(i).border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
+    });
+  }
+
+  ws.addRow([]).height = 4;
+
+  // Sum row
+  const erlSumRow = ws.addRow([]); erlSumRow.height = 20;
+  erlSumRow.getCell(3).value  = +totalErlArea.toFixed(2);
+  erlSumRow.getCell(3).numFmt = '#,##0.00 "m²"';
+  erlSumRow.getCell(3).font   = { bold: true, size: 9 };
+  erlSumRow.getCell(6).value  = totalErloes > 0 ? +totalErloes.toFixed(2) : null;
+  erlSumRow.getCell(6).numFmt = EUR_FMT;
+  erlSumRow.getCell(6).font   = { bold: true, size: 9 };
+  [1, 2, 3, 4, 5, 6].forEach(i => {
+    erlSumRow.getCell(i).border = { top: { style: 'thin', color: { argb: BORDER_C } } };
+  });
+
+  // ── Stellplätze ───────────────────────────────────────────────────────────
+  ws.addRow([]).height = 10;
+  const spSH = ws.addRow([]); spSH.height = 22;
+  spSH.getCell(1).value     = 'Erlöse Stellplätze';
+  spSH.getCell(1).font      = { bold: true, size: 11 };
+  spSH.getCell(1).alignment = { vertical: 'middle' };
+  ws.mergeCells(spSH.number, 1, spSH.number, 6);
+
+  ws.addRow([]).height = 4;
+
+  const spHRow2 = ws.addRow([]); spHRow2.height = 20;
+  ['Anzahl', 'SP Bezeichnung', '', '€ / Stück', '', 'Erlöse gesamt'].forEach((txt, i) => {
+    const c = spHRow2.getCell(i + 1);
+    c.value     = txt;
+    c.font      = { bold: true, size: 9 };
+    c.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } };
+    c.alignment = { vertical: 'middle', horizontal: i >= 2 ? 'right' : 'left' };
+    c.border    = { bottom: { style: 'thin', color: { argb: BORDER_C } } };
+  });
+
+  const spAnzahl    = project.anzahlStellplaetze ?? 0;
+  const spRaw       = vPrices['Stellplätze'] ?? { preisQm: '', festpreis: '' };
+  const spPerStueck = parseGerman(spRaw.festpreis); // per-piece price
+  const spTotal     = spPerStueck !== null && spAnzahl > 0 ? +(spPerStueck * spAnzahl).toFixed(2) : null;
+
+  const spRow2 = ws.addRow([]); spRow2.height = 18;
+  spRow2.getCell(1).value  = spAnzahl;
+  spRow2.getCell(2).value  = 'Stellplätze';
+  spRow2.getCell(4).value  = spPerStueck;
+  spRow2.getCell(4).numFmt = EUR_FMT;
+  if (spPerStueck === null) spRow2.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+  spRow2.getCell(6).value  = spTotal;
+  spRow2.getCell(6).numFmt = EUR_FMT;
+  if (spTotal === null) spRow2.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+  [1, 2, 3, 4, 5, 6].forEach(i => {
+    spRow2.getCell(i).font   = { size: 9 };
+    spRow2.getCell(i).border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
+  });
+}
+
+// ─── Excel-Download (modern styled via ExcelJS) ────────────────────────────────
+async function downloadExcel(project: Project, summary: ProjectSummary, allUnits: import('../types').Unit[], allRooms: import('../types').Room[], financeSummary: FinanceSummary | null) {
   // Dynamic import so bundle stays small when not needed
   const ExcelJS = ((await import('exceljs')) as unknown as { default: typeof ExcelJSType }).default;
   const now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -730,6 +1170,16 @@ async function downloadExcel(project: Project, summary: ProjectSummary) {
     }
   }
 
+  // ─── GIK (1) sheet ───────────────────────────────────────────────────────
+  try {
+    addGIK1Sheet(wb, project, summary, allUnits, allRooms, financeSummary);
+  } catch (e) {
+    console.error('[GIK1] Fehler beim Erstellen:', e);
+  }
+
+  // ─── GIK (2) sheet ───────────────────────────────────────────────────────
+  addGIKSheet(wb, allUnits, allRooms, project.anzahlStellplaetze ?? 0);
+
   // ─── Write & trigger download ─────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -799,6 +1249,8 @@ export default function SummaryPage() {
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: summary, isLoading } = useQuery(['summary', projectId], () => getProjectSummary(projectId!), { refetchInterval: 10_000 });
+  const { data: excelUnits = [] } = useQuery(['units', projectId], () => getUnits(projectId!));
+  const { data: excelRooms = [] } = useQuery(['rooms',  projectId], () => getRooms(projectId!));
 
   const frierenMutation = useMutation(() => frierePlanwerteEin(projectId!), {
     onSuccess: () => {
@@ -881,7 +1333,7 @@ export default function SummaryPage() {
             DATEV
           </button>
           <button
-            onClick={() => project && summary && void downloadExcel(project, summary)}
+            onClick={() => project && summary && void downloadExcel(project, summary, excelUnits as import('../types').Unit[], excelRooms as import('../types').Room[], financeSummary ?? null)}
             disabled={!summary || !project}
             className="btn btn-sm btn-success"
           >
