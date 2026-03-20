@@ -995,7 +995,7 @@ export default function BuildingPage() {
   const sortedFloors = [...floors]
     .filter(f => selectedPhase === 'specialConstruction'
       ? f.phaseType === 'specialConstruction'
-      : true)
+      : f.level !== -1)
     .sort((a, b) => a.level - b.level);
 
   const allRoomsForPhase = useMemo(() => {
