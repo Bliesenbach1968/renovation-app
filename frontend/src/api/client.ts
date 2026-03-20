@@ -13,10 +13,12 @@ client.interceptors.request.use((config) => {
 });
 
 // Bei 401 → Token löschen und zur Login-Seite umleiten
+// Ausnahme: /auth/login selbst (falsches Passwort) → Fehler an LoginPage weitergeben
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+    if (error.response?.status === 401 && !isLoginEndpoint) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
