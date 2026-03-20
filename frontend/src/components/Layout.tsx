@@ -35,14 +35,16 @@ const ICONS = {
   ),
 };
 
-const SIDEBAR_BG = '#0E1015';
-const SIDEBAR_BORDER = 'rgba(255,255,255,0.07)';
+const SIDEBAR_BG = '#C8CDD8';
+const SIDEBAR_BORDER = 'rgba(0,0,0,0.08)';
+const GREEN_ACTIVE = '#3B4252';
+const GREEN_TEXT = '#2D3748';
 
 const navItem = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-medium transition-all duration-200 ${
     isActive
-      ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
-      : 'text-white/45 hover:bg-white/[0.06] hover:text-white/80'
+      ? 'text-white shadow-md'
+      : 'hover:bg-black/[0.06]'
   }`;
 
 export default function Layout() {
@@ -75,16 +77,19 @@ export default function Layout() {
       >
         <button
           onClick={() => setSidebarOpen(true)}
-          className="text-white/60 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
+          className="p-1.5 -ml-1 rounded-lg transition-colors"
+          style={{ color: GREEN_TEXT }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.07)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           aria-label="Menü öffnen"
         >
           {ICONS.hamburger}
         </button>
-        <span className="text-white/90 text-[14px] font-semibold tracking-tight">{pageTitle}</span>
+        <span className="text-[14px] font-semibold tracking-tight" style={{ color: GREEN_TEXT }}>{pageTitle}</span>
         <div className="ml-auto">
           <div
             className="w-8 h-8 flex items-center justify-center text-white text-[11px] font-bold rounded-full"
-            style={{ background: 'linear-gradient(135deg, #2181FF 0%, #0052AD 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #4B5563 0%, #1F2937 100%)' }}
           >
             {initials}
           </div>
@@ -102,7 +107,7 @@ export default function Layout() {
         style={{ background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}` }}
       >
         {/* Brand */}
-        <div className="px-4 pt-5 pb-4 flex-shrink-0" style={{ borderBottom: `1px solid ${SIDEBAR_BORDER}` }}>
+        <div className="px-4 pt-5 pb-4 flex-shrink-0" style={{ background: '#3B4252', borderBottom: '1px solid rgba(0,0,0,0.18)' }}>
           <div className="flex items-center justify-center">
             <img src="/logo.png" alt="Renova Plan Logo" className="h-[108px] w-auto object-contain" />
           </div>
@@ -114,10 +119,13 @@ export default function Layout() {
           {/* Hauptbereich */}
           <div className="mb-1">
             <p className="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-widest"
-              style={{ color: 'rgba(255,255,255,0.22)' }}>
+              style={{ color: 'rgba(0,0,0,0.35)' }}>
               Übersicht
             </p>
-            <NavLink to="/" end className={navItem} onClick={close}>
+            <NavLink to="/" end onClick={close} className={navItem}
+              style={({ isActive }) => isActive
+                ? { background: GREEN_ACTIVE, boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }
+                : { color: GREEN_TEXT }}>
               {ICONS.home}
               Dashboard
             </NavLink>
@@ -126,15 +134,21 @@ export default function Layout() {
           {isAdmin && (
             <div className="pt-3">
               <p className="px-3 mb-1.5 text-[10.5px] font-semibold uppercase tracking-widest"
-                style={{ color: 'rgba(255,255,255,0.22)' }}>
+                style={{ color: 'rgba(0,0,0,0.35)' }}>
                 Administration
               </p>
               <div className="space-y-0.5">
-                <NavLink to="/admin/users" className={navItem} onClick={close}>
+                <NavLink to="/admin/users" onClick={close} className={navItem}
+                  style={({ isActive }) => isActive
+                    ? { background: GREEN_ACTIVE, boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }
+                    : { color: GREEN_TEXT }}>
                   {ICONS.users}
                   Nutzerverwaltung
                 </NavLink>
-                <NavLink to="/admin/templates" className={navItem} onClick={close}>
+                <NavLink to="/admin/templates" onClick={close} className={navItem}
+                  style={({ isActive }) => isActive
+                    ? { background: GREEN_ACTIVE, boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }
+                    : { color: GREEN_TEXT }}>
                   {ICONS.templates}
                   Vorlagen
                 </NavLink>
@@ -148,27 +162,27 @@ export default function Layout() {
           {/* Avatar card */}
           <div
             className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-1"
-            style={{ background: 'rgba(255,255,255,0.05)' }}
+            style={{ background: 'rgba(255,255,255,0.55)' }}
           >
             <div
               className="w-8 h-8 flex items-center justify-center text-white text-[11px] font-bold shrink-0 rounded-full"
-              style={{ background: 'linear-gradient(135deg, #2181FF 0%, #0052AD 100%)', boxShadow: '0 2px 8px rgba(0,113,227,0.4)' }}
+              style={{ background: 'linear-gradient(135deg, #6B7280 0%, #374151 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.20)' }}
             >
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-[12.5px] font-semibold truncate leading-tight">{user?.name}</p>
+              <p className="text-[12.5px] font-semibold truncate leading-tight" style={{ color: GREEN_TEXT }}>{user?.name}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {isAdmin && (
                   <span
                     className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold"
-                    style={{ background: 'rgba(0,113,227,0.25)', color: '#60A5FA' }}
+                    style={{ background: 'rgba(0,0,0,0.10)', color: '#374151' }}
                   >
                     {ICONS.shield}
                     Admin
                   </span>
                 )}
-                <p className="text-[10.5px] truncate leading-tight" style={{ color: 'rgba(255,255,255,0.30)' }}>
+                <p className="text-[10.5px] truncate leading-tight" style={{ color: 'rgba(0,0,0,0.40)' }}>
                   {user?.email}
                 </p>
               </div>
@@ -179,13 +193,13 @@ export default function Layout() {
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium rounded-xl transition-all duration-200"
-            style={{ color: 'rgba(255,255,255,0.35)' }}
+            style={{ color: 'rgba(0,0,0,0.40)' }}
             onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.color = '#F87171';
+              (e.currentTarget as HTMLButtonElement).style.color = '#DC2626';
               (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.08)';
             }}
             onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)';
+              (e.currentTarget as HTMLButtonElement).style.color = 'rgba(0,0,0,0.40)';
               (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
             }}
           >
