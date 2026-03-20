@@ -24,11 +24,8 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({ message: 'E-Mail und Passwort erforderlich' });
 
     const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.comparePassword(password)))
+    if (!user || !user.isActive || !(await user.comparePassword(password)))
       return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
-
-    if (!user.isActive)
-      return res.status(401).json({ message: 'Konto ist deaktiviert' });
 
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
