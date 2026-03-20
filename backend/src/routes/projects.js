@@ -27,4 +27,6 @@ router.delete('/:id/team/:userId',   authorizeProjectAccess, authorize('admin', 
 router.post('/:id/planwerte-einfrieren',   authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.frierePlanwerteEin);
 router.delete('/:id/planwerte-einfrieren', authorizeProjectAccess, authorize('admin', 'projectLeader'), projectController.loeschePlanwerte);
 
+router.put('/:id/vertrieb-preise', authorizeProjectAccess, projectController.updateVertriebPreise);
+
 module.exports = router;

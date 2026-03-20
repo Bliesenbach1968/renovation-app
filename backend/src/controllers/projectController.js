@@ -648,3 +648,23 @@ exports.loeschePlanwerte = async (req, res, next) => {
     res.json({ success: true, message: 'Planwerte zurückgesetzt' });
   } catch (err) { next(err); }
 };
+
+// PUT /api/v1/projects/:id/vertrieb-preise
+// Speichert Vertrieb-Preise (WE/DG/Stellplätze) in der Datenbank
+exports.updateVertriebPreise = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: 'Projekt nicht gefunden' });
+
+    const preise = req.body; // { "WE01": { preisQm: "...", festpreis: "..." }, ... }
+    if (typeof preise !== 'object' || Array.isArray(preise)) {
+      return res.status(400).json({ message: 'Ungültiges Format' });
+    }
+
+    project.vertriebPreise = new Map(Object.entries(preise));
+    project.markModified('vertriebPreise');
+    await project.save();
+
+    res.json({ success: true, data: Object.fromEntries(project.vertriebPreise) });
+  } catch (err) { next(err); }
+};

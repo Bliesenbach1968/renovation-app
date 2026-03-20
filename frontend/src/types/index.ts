@@ -52,6 +52,7 @@ export interface Project {
   grundstueckFlaeche?: number | null;
   anzahlStellplaetze?: number;
   aktuelleGesamtsumme?: number | null;
+  vertriebPreise?: Record<string, { preisQm: string; festpreis: string }>;
   geplantePhasensummeEntkernung?: number | null;
   geplantePhasensummeRenovierung?: number | null;
   geplantePhasensummeSonderarbeiten?: number | null;

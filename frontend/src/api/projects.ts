@@ -45,6 +45,10 @@ export const updatePhaseStatus = async (projectId: string, phaseId: string, stat
   const { data } = await client.patch(`/projects/${projectId}/phases/${phaseId}`, { status });
   return data.data as Project;
 };
+export const updateVertriebPreise = async (projectId: string, preise: Record<string, { preisQm: string; festpreis: string }>) => {
+  const { data } = await client.put(`/projects/${projectId}/vertrieb-preise`, preise);
+  return data.data as Record<string, { preisQm: string; festpreis: string }>;
+};
 
 // === Etagen ===
 export const getFloors = async (projectId: string) => {

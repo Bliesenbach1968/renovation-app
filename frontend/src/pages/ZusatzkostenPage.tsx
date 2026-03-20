@@ -64,12 +64,17 @@ function emptyForm(config: ModuleConfig): FormState {
   return { name: config.defaultName, unit: 'Psch', quantity: 1, pricePerUnit: 0, description: '' };
 }
 
+function formFromTemplate(t: PositionTemplate): FormState {
+  return { name: t.name, unit: t.unit, quantity: 1, pricePerUnit: t.materialCostPerUnit, description: t.description || '' };
+}
+
 function PositionFormInline({
   initial,
   title,
   onSave,
   onCancel,
   saveLabel = 'Speichern',
+  isSaving = false,
   extraAction,
 }: {
   initial: FormState;
@@ -77,6 +82,7 @@ function PositionFormInline({
   onSave: (f: FormState) => void;
   onCancel: () => void;
   saveLabel?: string;
+  isSaving?: boolean;
   extraAction?: { label: string; onClick: (f: FormState) => void };
 }) {
   const [f, setF] = useState<FormState>(initial);
@@ -108,7 +114,7 @@ function PositionFormInline({
           <input
             type="number" min="0" step="0.01"
             value={f.quantity}
-            onChange={e => set('quantity', +e.target.value)}
+            onChange={e => set('quantity', +e.target.value || 0)}
             className="input"
           />
         </div>
@@ -117,7 +123,7 @@ function PositionFormInline({
           <input
             type="number" min="0" step="0.01"
             value={f.pricePerUnit}
-            onChange={e => set('pricePerUnit', +e.target.value)}
+            onChange={e => set('pricePerUnit', +e.target.value || 0)}
             className="input"
           />
         </div>
@@ -141,14 +147,18 @@ function PositionFormInline({
       </div>
 
       <div className="flex flex-wrap gap-2 pt-1">
-        <button onClick={() => onSave(f)} disabled={!f.name} className="btn-primary text-sm">
-          {saveLabel}
+        <button
+          onClick={() => onSave(f)}
+          disabled={!f.name || isSaving}
+          className="btn-primary text-sm disabled:opacity-60"
+        >
+          {isSaving ? 'Speichern…' : saveLabel}
         </button>
         {extraAction && (
           <button
             onClick={() => extraAction.onClick(f)}
-            disabled={!f.name}
-            className="text-sm px-3 py-1.5 rounded-lg border border-primary-300 bg-primary-50 hover:bg-primary-100 text-primary-700 transition-colors"
+            disabled={!f.name || isSaving}
+            className="text-sm px-3 py-1.5 rounded-lg border border-primary-300 bg-primary-50 hover:bg-primary-100 text-primary-700 transition-colors disabled:opacity-60"
           >
             {extraAction.label}
           </button>
@@ -189,7 +199,7 @@ function TemplateFormInline({
         </div>
         <div>
           <label className="label">Kosten pro Einheit (€)</label>
-          <input type="number" min="0" step="0.01" value={f.pricePerUnit} onChange={e => set('pricePerUnit', +e.target.value)} className="input" />
+          <input type="number" min="0" step="0.01" value={f.pricePerUnit} onChange={e => set('pricePerUnit', +e.target.value || 0)} className="input" />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Beschreibung</label>
@@ -210,10 +220,12 @@ export default function ZusatzkostenPage() {
   const qc = useQueryClient();
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [addFormInitial, setAddFormInitial] = useState<FormState | null>(null);
   const [editPos, setEditPos] = useState<Position | null>(null);
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [editTemplate, setEditTemplate] = useState<PositionTemplate | null>(null);
   const [showTemplateSection, setShowTemplateSection] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
 
@@ -232,6 +244,11 @@ export default function ZusatzkostenPage() {
   const invPos = () => qc.invalidateQueries(['positions', 'modul', projectId, moduleKey]);
   const invTpl = () => qc.invalidateQueries(['templates', moduleKey]);
 
+  const handleError = (err: unknown) => {
+    const msg = (err as any)?.response?.data?.message || (err as any)?.message || 'Unbekannter Fehler';
+    setErrorMsg(msg);
+  };
+
   const createPosMut = useMutation(
     (f: FormState) => createPosition(projectId!, {
       phaseType: moduleKey as PhaseType,
@@ -246,7 +263,10 @@ export default function ZusatzkostenPage() {
       description: f.description || undefined,
       category: config.label,
     }),
-    { onSuccess: () => { invPos(); setShowAddForm(false); } },
+    {
+      onSuccess: () => { invPos(); setShowAddForm(false); setAddFormInitial(null); setErrorMsg(null); },
+      onError: handleError,
+    },
   );
 
   const updatePosMut = useMutation(
@@ -255,14 +275,19 @@ export default function ZusatzkostenPage() {
       unit: f.unit,
       quantity: f.quantity,
       materialCostPerUnit: f.pricePerUnit,
+      disposalCostPerUnit: 0,
+      laborHoursPerUnit: 0,
       description: f.description || undefined,
     }),
-    { onSuccess: () => { invPos(); setEditPos(null); } },
+    {
+      onSuccess: () => { invPos(); setEditPos(null); setErrorMsg(null); },
+      onError: handleError,
+    },
   );
 
   const deletePosMut = useMutation(
     (id: string) => deletePosition(projectId!, id),
-    { onSuccess: invPos },
+    { onSuccess: invPos, onError: handleError },
   );
 
   const createTplMut = useMutation(
@@ -279,7 +304,7 @@ export default function ZusatzkostenPage() {
         description: f.description || undefined,
         category: config.label,
       }),
-    { onSuccess: () => { invTpl(); setShowNewTemplate(false); } },
+    { onSuccess: () => { invTpl(); setShowNewTemplate(false); }, onError: handleError },
   );
 
   const updateTplMut = useMutation(
@@ -289,17 +314,20 @@ export default function ZusatzkostenPage() {
         materialCostPerUnit: f.pricePerUnit,
         description: f.description || undefined,
       }),
-    { onSuccess: () => { invTpl(); setEditTemplate(null); } },
+    { onSuccess: () => { invTpl(); setEditTemplate(null); }, onError: handleError },
   );
 
   const deleteTplMut = useMutation(
     (id: string) => deleteTemplateApi(id),
-    { onSuccess: invTpl },
+    { onSuccess: invTpl, onError: handleError },
   );
 
   const positionsList = positions as Position[];
   const templatesList = templates as PositionTemplate[];
   const totalSum = positionsList.reduce((s, p) => s + p.totalCost, 0);
+
+  const isCreating = createPosMut.isLoading;
+  const isUpdating = updatePosMut.isLoading;
 
   if (!config) {
     return (
@@ -323,6 +351,15 @@ export default function ZusatzkostenPage() {
         )}
       </div>
 
+      {/* Error Banner */}
+      {errorMsg && (
+        <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+          <span className="font-semibold shrink-0">Fehler:</span>
+          <span className="flex-1">{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
       {/* Vorlagen-Bereich */}
       <div className="card mb-4">
         <div className="flex items-center justify-between mb-3">
@@ -345,24 +382,19 @@ export default function ZusatzkostenPage() {
 
         {showTemplateSection && (
           <div className="space-y-2">
-            {/* Quick-Add Buttons */}
+            {/* Quick-Add Buttons: Vorlage übernehmen und Formular vorausfüllen */}
             {templatesList.length > 0 && !showNewTemplate && !editTemplate && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {templatesList.map(t => (
                   <button
                     key={t._id}
                     onClick={() => {
+                      setAddFormInitial(formFromTemplate(t));
                       setShowAddForm(true);
                       setEditPos(null);
                     }}
                     title={`Vorlage "${t.name}" übernehmen`}
                     className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-primary-300 hover:bg-primary-50 text-slate-700 shadow-sm transition-all"
-                    onClickCapture={(e) => {
-                      e.preventDefault();
-                      setShowAddForm(true);
-                      setEditPos(null);
-                      // We'll handle prefill via a separate mechanism
-                    }}
                   >
                     {t.name}
                     {t.materialCostPerUnit > 0 && <span className="text-slate-400 ml-1">{t.materialCostPerUnit.toLocaleString('de-DE')} €/{t.unit}</span>}
@@ -429,7 +461,7 @@ export default function ZusatzkostenPage() {
             Positionen ({positionsList.length})
           </h2>
           {!showAddForm && !editPos && (
-            <button onClick={() => setShowAddForm(true)} className="btn-primary text-sm">
+            <button onClick={() => { setAddFormInitial(null); setShowAddForm(true); }} className="btn-primary text-sm">
               + Position hinzufügen
             </button>
           )}
@@ -439,10 +471,11 @@ export default function ZusatzkostenPage() {
         {showAddForm && !editPos && (
           <PositionFormInline
             title="Neue Position"
-            initial={emptyForm(config)}
+            initial={addFormInitial ?? emptyForm(config)}
             onSave={(f) => createPosMut.mutate(f)}
-            onCancel={() => setShowAddForm(false)}
+            onCancel={() => { setShowAddForm(false); setAddFormInitial(null); }}
             saveLabel="Position anlegen"
+            isSaving={isCreating}
             extraAction={{
               label: 'Anlegen + als Vorlage speichern',
               onClick: (f) => {
@@ -457,7 +490,7 @@ export default function ZusatzkostenPage() {
         {positionsList.length === 0 && !showAddForm && (
           <div className="card text-center py-10 text-gray-400">
             <p className="mb-3">Noch keine Positionen angelegt</p>
-            <button onClick={() => setShowAddForm(true)} className="btn-primary">+ Position hinzufügen</button>
+            <button onClick={() => { setAddFormInitial(null); setShowAddForm(true); }} className="btn-primary">+ Position hinzufügen</button>
           </div>
         )}
 
@@ -470,6 +503,7 @@ export default function ZusatzkostenPage() {
                 onSave={(f) => updatePosMut.mutate({ id: p._id, f })}
                 onCancel={() => setEditPos(null)}
                 saveLabel="Änderungen speichern"
+                isSaving={isUpdating}
               />
             ) : (
               <div className="group flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm hover:border-primary-200 transition-colors">

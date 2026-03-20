@@ -81,6 +81,9 @@ const projectSchema = new mongoose.Schema(
     // Wird beim planned→active Übergang je Phase eingefroren
     geplanteBereichssummen: { type: Map, of: Number, default: {} },
 
+    // Vertrieb-Preise je WE/DG/Stellplätze (Key: z.B. "WE01", "Dachgeschoss", "Stellplätze")
+    vertriebPreise: { type: Map, of: new mongoose.Schema({ preisQm: String, festpreis: String }, { _id: false }), default: {} },
+
     // Farbstatus für das Feld geplanteGesamtsummeProjekt im Dashboard.
     // Wird dynamisch berechnet: Abweichung aktuelleGesamtsumme vs. geplanteGesamtsummeProjekt.
     //   'gruen' → 0 % Abweichung (Plan = Ist)

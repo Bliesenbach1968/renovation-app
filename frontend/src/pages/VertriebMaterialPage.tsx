@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from 'react-query';
-import { getProject, getUnits, getRooms, getFloors } from '../api/projects';
+import { getProject, getUnits, getRooms, getFloors, updateVertriebPreise } from '../api/projects';
 import type { Unit, Room, Floor } from '../types';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -46,20 +46,10 @@ function roomUnitId(r: Room): string | null {
   return typeof r.unitId === 'string' ? r.unitId : (r.unitId as Unit)._id;
 }
 
-// ── Price storage (localStorage) ────────────────────────────────────────────
+// ── Price storage ────────────────────────────────────────────────────────────
 
 type PriceEntry = { preisQm: string; festpreis: string };
 type PriceMap   = Record<string, PriceEntry>; // key → prices
-
-function loadPrices(projectId: string): PriceMap {
-  try {
-    const raw = localStorage.getItem(`vertrieb_prices_${projectId}`);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-function savePrices(projectId: string, map: PriceMap) {
-  localStorage.setItem(`vertrieb_prices_${projectId}`, JSON.stringify(map));
-}
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
@@ -177,11 +167,14 @@ export default function VertriebMaterialPage() {
   const { data: floors = [] } = useQuery(['floors', projectId],      () => getFloors(projectId!));
 
   const [prices, setPrices] = useState<PriceMap>({});
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load prices from localStorage once projectId is known
+  // Load prices from project data once loaded
   useEffect(() => {
-    if (projectId) setPrices(loadPrices(projectId));
-  }, [projectId]);
+    if (project?.vertriebPreise) {
+      setPrices(project.vertriebPreise as PriceMap);
+    }
+  }, [project]);
 
   const handlePriceChange = (key: string, field: 'preisQm' | 'festpreis', val: string) => {
     setPrices(prev => {
@@ -189,7 +182,13 @@ export default function VertriebMaterialPage() {
         ...prev,
         [key]: { ...(prev[key] ?? { preisQm: '', festpreis: '' }), [field]: val },
       };
-      if (projectId) savePrices(projectId, next);
+      // Debounced save to backend
+      if (projectId) {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => {
+          updateVertriebPreise(projectId, next).catch(() => {});
+        }, 800);
+      }
       return next;
     });
   };

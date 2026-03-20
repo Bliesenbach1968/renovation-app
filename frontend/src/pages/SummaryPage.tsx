@@ -591,13 +591,8 @@ function addGIK1Sheet(
   const finanzCost: number | null      = financeSummary?.totalInterest    ?? null;
   const grundstueckCost: number | null = financeSummary?.totalAcquisition ?? null;
 
-  // Vertrieb prices from localStorage
-  let vPrices: Record<string, { preisQm: string; festpreis: string }> = {};
-  try {
-    const raw = typeof localStorage !== 'undefined'
-      ? localStorage.getItem(`vertrieb_prices_${project._id}`) : null;
-    if (raw) vPrices = JSON.parse(raw) as typeof vPrices;
-  } catch { /* ignore */ }
+  // Vertrieb prices from project data
+  const vPrices: Record<string, { preisQm: string; festpreis: string }> = project.vertriebPreise ?? {};
 
   function parseGerman(s: string): number | null {
     if (!s?.trim()) return null;
@@ -632,9 +627,11 @@ function addGIK1Sheet(
     if (k.manual) {
       row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
     }
-    row.getCell(7).value     = k.note;
-    row.getCell(7).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
-    row.getCell(7).alignment = { vertical: 'middle' };
+    if (k.value === null) {
+      row.getCell(7).value     = k.note;
+      row.getCell(7).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
+      row.getCell(7).alignment = { vertical: 'middle' };
+    }
   }
 
   ws.addRow([]).height = 6;
@@ -712,10 +709,12 @@ function addGIK1Sheet(
     row.getCell(4).fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } };
     row.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
 
-    const noteRow = ws.addRow([]); noteRow.height = 14;
-    noteRow.getCell(2).value     = pos.note;
-    noteRow.getCell(2).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
-    noteRow.getCell(2).alignment = { vertical: 'middle', indent: 2 };
+    if (pos.manual) {
+      const noteRow = ws.addRow([]); noteRow.height = 14;
+      noteRow.getCell(2).value     = pos.note;
+      noteRow.getCell(2).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
+      noteRow.getCell(2).alignment = { vertical: 'middle', indent: 2 };
+    }
   }
 
   // Total row
