@@ -15,6 +15,7 @@ import AdminUsersPage from './pages/AdminUsersPage';
 import AdminTemplatesPage from './pages/AdminTemplatesPage';
 import NewProjectPage from './pages/NewProjectPage';
 import EditProjectPage from './pages/EditProjectPage';
+import ProjectLayout from './components/ProjectLayout';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import FinancePage from './pages/FinancePage';
@@ -46,23 +47,25 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/"                             element={<DashboardPage />} />
         <Route path="/projects/new"                 element={<NewProjectPage />} />
-        <Route path="/projects/:id/edit"            element={<EditProjectPage />} />
-        <Route path="/projects/:id"                 element={<ProjectDetailPage />} />
-        <Route path="/projects/:id/building"        element={<BuildingPage />} />
-        <Route path="/projects/:id/rooms/:roomId"   element={<RoomDetailPage />} />
-        <Route path="/projects/:id/summary"         element={<SummaryPage />} />
-        <Route path="/projects/:id/timeline"        element={<TimelinePage />} />
-        <Route path="/projects/:id/containers"      element={<ContainerPage />} />
-        <Route path="/projects/:id/geruest"         element={<GeruestPage />} />
-        <Route path="/projects/:id/kran"            element={<KranPage />} />
-        <Route path="/projects/:id/finance"         element={<FinancePage />} />
-        <Route path="/projects/:id/abrisskosten"    element={<AbrisskotenPage />} />
-        <Route path="/projects/:id/baukosten"       element={<BaukostenPage />} />
-        <Route path="/projects/:id/module/:module"   element={<ZusatzkostenPage />} />
-        <Route path="/projects/:id/vertrieb-material" element={<VertriebMaterialPage />} />
-        <Route path="/projects/:id/materialbedarf"    element={<MaterialbedarfPage />} />
-        <Route path="/projects/:id/datev"           element={<DatevExportPage />} />
-        <Route path="/projects/:id/gaeb"           element={<GaebPage />} />
+        <Route path="/projects/:id"                 element={<ProjectLayout />}>
+          <Route index                              element={<ProjectDetailPage />} />
+          <Route path="edit"                        element={<EditProjectPage />} />
+          <Route path="building"                    element={<BuildingPage />} />
+          <Route path="rooms/:roomId"               element={<RoomDetailPage />} />
+          <Route path="summary"                     element={<SummaryPage />} />
+          <Route path="timeline"                    element={<TimelinePage />} />
+          <Route path="containers"                  element={<ContainerPage />} />
+          <Route path="geruest"                     element={<GeruestPage />} />
+          <Route path="kran"                        element={<KranPage />} />
+          <Route path="finance"                     element={<FinancePage />} />
+          <Route path="abrisskosten"                element={<AbrisskotenPage />} />
+          <Route path="baukosten"                   element={<BaukostenPage />} />
+          <Route path="module/:module"              element={<ZusatzkostenPage />} />
+          <Route path="vertrieb-material"           element={<VertriebMaterialPage />} />
+          <Route path="materialbedarf"              element={<MaterialbedarfPage />} />
+          <Route path="datev"                       element={<DatevExportPage />} />
+          <Route path="gaeb"                        element={<GaebPage />} />
+        </Route>
         <Route path="/admin/users"                  element={<AdminUsersPage />} />
         <Route path="/admin/templates"              element={<AdminTemplatesPage />} />
       </Route>
