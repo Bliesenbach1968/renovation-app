@@ -102,6 +102,7 @@ export default function PositionForm({
   const [sub2, setSub2] = useState(initParts[1] || '');
   const [sub3, setSub3] = useState(initParts[2] || '');
 
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     defaultValues: editPosition
       ? {
