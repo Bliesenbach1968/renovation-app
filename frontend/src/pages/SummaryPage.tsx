@@ -637,11 +637,6 @@ function addGIK1Sheet(
     if (k.manual) {
       row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
     }
-    if (k.value === null) {
-      row.getCell(7).value     = k.note;
-      row.getCell(7).font      = { size: 8, italic: true, color: { argb: NOTE_C } };
-      row.getCell(7).alignment = { vertical: 'middle' };
-    }
   }
 
   ws.addRow([]).height = 6;
