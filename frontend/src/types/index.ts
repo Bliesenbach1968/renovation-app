@@ -211,6 +211,16 @@ export interface BereichVergleichRow {
   deltaPercent: number | null;
 }
 
+export interface GikData {
+  _id?: string;
+  projectId: string;
+  grz: number | null;
+  bgf: number | null;
+  manualGrundstueckCost: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ProjectSummary {
   phases: Record<PhaseType, PhaseSummary>;
   totals: { materialCost: number; disposalCost: number; laborCost: number; containerCost: number; geruestCost: number; kranCost: number; grandTotal: number; totalHours: number; };

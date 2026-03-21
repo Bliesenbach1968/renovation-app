@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { jsPDF } from 'jspdf';
@@ -8,6 +8,7 @@ import { getProject, getProjectSummary, getRooms, getUnits, frierePlanwerteEin, 
 import { getFinanceSummary } from '../api/finance';
 import type { ProjectSummary, Project, BereichVergleichRow, PhaseType } from '../types';
 import type { FinanceSummary } from '../domain/finance/VariableInterestEngine';
+import GikTab from '../components/summary/GikTab';
 
 const PLAN_PHASE_NAMES: Record<string, string> = {
   demolition: 'Entkernung', renovation: 'Renovierung', specialConstruction: 'Sonderarbeiten',
@@ -1306,12 +1307,61 @@ function FinanceKpiBar({ fin, projectId }: { fin: FinanceSummary; projectId: str
   );
 }
 
+// ─── Tab-Definitionen ─────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'uebersicht',  label: 'Übersicht' },
+  { id: 'gik',         label: 'GIK' },
+  { id: 'planvsist',   label: 'Plan vs. Ist' },
+  { id: 'finanzierung',label: 'Finanzierung' },
+] as const;
+type TabId = typeof TABS[number]['id'];
+
+// ─── Sticky KPI Bar ───────────────────────────────────────────────────────────
+
+function StickyKpiBar({
+  gesamtkosten, gesamtErloes, wohnflaeche, wohneinheiten, kostenProM2,
+}: {
+  gesamtkosten: number; gesamtErloes: number | null;
+  wohnflaeche: number; wohneinheiten: number; kostenProM2: number | null;
+}) {
+  const gewinn = gesamtErloes != null ? gesamtErloes - gesamtkosten : null;
+  const items = [
+    { label: 'Gesamtkosten',  value: eur(gesamtkosten),   accent: 'text-gray-900', bold: true },
+    ...(gesamtErloes != null ? [
+      { label: 'Gesamterlöse', value: eur(gesamtErloes), accent: 'text-green-700', bold: false },
+      {
+        label: gewinn != null && gewinn >= 0 ? 'Gewinn' : 'Verlust',
+        value: eur(Math.abs(gewinn ?? 0)),
+        accent: gewinn != null && gewinn >= 0 ? 'text-green-700 font-bold' : 'text-red-600 font-bold',
+        bold: true,
+      },
+    ] : []),
+    ...(kostenProM2 != null ? [{ label: 'Kosten/m²', value: eur(kostenProM2), accent: 'text-blue-700', bold: false }] : []),
+    { label: 'Wohnfläche',    value: wohnflaeche > 0 ? `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(wohnflaeche)} m²` : '–', accent: 'text-gray-700', bold: false },
+    { label: 'Wohneinheiten', value: String(wohneinheiten), accent: 'text-gray-700', bold: false },
+  ];
+  return (
+    <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200 shadow-sm print:hidden">
+      <div className="max-w-6xl mx-auto flex items-center gap-0 divide-x divide-gray-100 overflow-x-auto">
+        {items.map((item) => (
+          <div key={item.label} className="flex flex-col px-4 py-2.5 min-w-[110px]">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{item.label}</span>
+            <span className={`text-sm leading-tight ${item.bold ? 'font-bold' : 'font-semibold'} ${item.accent}`}>{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
 export default function SummaryPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabId>('uebersicht');
 
   const { data: project } = useQuery(['project', projectId], () => getProject(projectId!));
   const { data: summary, isLoading } = useQuery(['summary', projectId], () => getProjectSummary(projectId!), { refetchInterval: 10_000 });
@@ -1369,195 +1419,292 @@ export default function SummaryPage() {
     ? totals.grandTotal / gesamtwohnflaeche
     : null;
 
+  // ── Gesamterlöse für KPI-Bar (aus vertriebPreise) ────────────────────────
+  const vPrices = project?.vertriebPreise ?? {};
+  function parseDE(s: string) {
+    if (!s?.trim()) return null;
+    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+  }
+  const gikUnitList = excelUnits.flatMap((u: import('../types').Unit) => {
+    const name = u.name ?? '';
+    const num  = u.number ?? '';
+    const weM  = (num + ' ' + name).toUpperCase().match(/\b(WE\d+[A-Z]?)\b/);
+    const isDG = /(^|\s)(dachgeschoss|dachgeschoß|dg)(\s|$)/i.test(name) || /(^|\s)(dachgeschoss|dachgeschoß|dg)(\s|$)/i.test(num);
+    if (!weM && !isDG) return [];
+    const unitArea = +(excelRooms as import('../types').Room[])
+      .filter((r) => {
+        if (!r.unitId) return false;
+        const uid = typeof r.unitId === 'string' ? r.unitId : (r.unitId as import('../types').Unit)._id;
+        return uid === u._id;
+      })
+      .reduce((s, r) => s + (r.dimensions?.area ?? 0), 0)
+      .toFixed(2);
+    const key    = weM ? weM[1] : 'Dachgeschoss';
+    const p      = vPrices[key] ?? { preisQm: '', festpreis: '' };
+    const fp     = parseDE(p.festpreis);
+    const qm     = parseDE(p.preisQm);
+    const erloes = fp ?? (qm != null && unitArea > 0 ? +(qm * unitArea).toFixed(2) : null);
+    return erloes != null ? [erloes] : [];
+  });
+  const spAnzahl    = project?.anzahlStellplaetze ?? 0;
+  const spPerStueck = parseDE(vPrices['Stellplätze']?.festpreis ?? '');
+  const spTotal     = spPerStueck != null && spAnzahl > 0 ? +(spPerStueck * spAnzahl).toFixed(2) : null;
+  const gesamtErloes = gikUnitList.length > 0 || spTotal != null
+    ? +(gikUnitList.reduce((s, v) => s + v, 0) + (spTotal ?? 0)).toFixed(2)
+    : null;
+
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <Link to={`/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">← Projekt</Link>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kostenkalkulation</h1>
-        <span className="text-gray-400 text-sm hidden sm:inline">{project?.name}</span>
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => navigate(`/projects/${projectId}/gaeb`)}
-            className="btn btn-sm btn-secondary"
-            title="GAEB Leistungsverzeichnis exportieren / importieren"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-            </svg>
-            GAEB
-          </button>
-          <button
-            onClick={() => navigate(`/projects/${projectId}/datev`)}
-            className="btn btn-sm btn-secondary"
-            title="DATEV Buchungsstapel exportieren"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            DATEV
-          </button>
-          <button
-            onClick={() => project && summary && void downloadExcel(project, summary, excelUnits as import('../types').Unit[], excelRooms as import('../types').Room[], financeSummary ?? null)}
-            disabled={!summary || !project}
-            className="btn btn-sm btn-success"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Excel
-          </button>
-          <button
-            onClick={() => project && summary && downloadPDF(project, summary)}
-            disabled={!summary || !project}
-            className="btn btn-sm btn-danger"
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            PDF
-          </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* ── Sticky KPI Bar ─────────────────────────────────────────────────── */}
+      {totals && (
+        <StickyKpiBar
+          gesamtkosten={totals.grandTotal}
+          gesamtErloes={gesamtErloes}
+          wohnflaeche={gesamtwohnflaeche}
+          wohneinheiten={project?.anzahlWohnungen ?? 0}
+          kostenProM2={kostenProM2}
+        />
+      )}
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        {/* ── Header ───────────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-3 py-4">
+          <Link to={`/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">← Projekt</Link>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kostenkalkulation</h1>
+          <span className="text-gray-400 text-sm hidden sm:inline">{project?.name}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/projects/${projectId}/gaeb`)}
+              className="btn btn-sm btn-secondary"
+              title="GAEB Leistungsverzeichnis exportieren / importieren"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              GAEB
+            </button>
+            <button
+              onClick={() => navigate(`/projects/${projectId}/datev`)}
+              className="btn btn-sm btn-secondary"
+              title="DATEV Buchungsstapel exportieren"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              DATEV
+            </button>
+            <button
+              onClick={() => project && summary && void downloadExcel(project, summary, excelUnits as import('../types').Unit[], excelRooms as import('../types').Room[], financeSummary ?? null)}
+              disabled={!summary || !project}
+              className="btn btn-sm btn-success"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Excel
+            </button>
+            <button
+              onClick={() => project && summary && downloadPDF(project, summary)}
+              disabled={!summary || !project}
+              className="btn btn-sm btn-danger"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              PDF
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Phase-Karten (Entkernung, Renovierung, Sonderarbeiten) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        {phases && PHASE_ORDER.filter((p) => phases[p]).map((phase) => (
-          <PhaseCard key={phase} phase={phase} data={phases[phase]} />
-        ))}
-      </div>
+        {/* ── Tab Navigation ────────────────────────────────────────────────── */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="flex gap-0 -mb-px" role="tablist" aria-label="Kostenkalkulation Bereiche">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+                  ${activeTab === tab.id
+                    ? 'border-primary-600 text-primary-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
 
-      {/* Modul-Karten (Baunebenkosten, Planungskosten, Ausstellung, Vertrieb) */}
-      {phases && MODULE_PHASES.some((m) => (phases[m]?.subtotal ?? 0) > 0) && (
-        <div className="mb-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Weitere Kosten</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {MODULE_PHASES.map((m) => {
-              const d = phases[m];
-              if (!d) return null;
-              return (
-                <div key={m} className={`card border-l-4 ${PHASE_COLORS[m]} py-3`}>
-                  <h3 className="font-semibold text-gray-900 text-sm mb-2">{PHASE_NAMES[m]}</h3>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">{d.positionCount} Position{d.positionCount !== 1 ? 'en' : ''}</span>
+        {/* ── Tab Inhalt ────────────────────────────────────────────────────── */}
+
+        {/* Übersicht */}
+        {activeTab === 'uebersicht' && (
+          <div role="tabpanel" aria-label="Übersicht">
+            {/* Phase-Karten */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {phases && PHASE_ORDER.filter((p) => phases[p]).map((phase) => (
+                <PhaseCard key={phase} phase={phase} data={phases[phase]} />
+              ))}
+            </div>
+
+            {/* Modul-Karten */}
+            {phases && MODULE_PHASES.some((m) => (phases[m]?.subtotal ?? 0) > 0) && (
+              <div className="mb-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Weitere Kosten</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {MODULE_PHASES.map((m) => {
+                    const d = phases[m];
+                    if (!d) return null;
+                    return (
+                      <div key={m} className={`card border-l-4 ${PHASE_COLORS[m]} py-3`}>
+                        <h3 className="font-semibold text-gray-900 text-sm mb-2">{PHASE_NAMES[m]}</h3>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">{d.positionCount} Position{d.positionCount !== 1 ? 'en' : ''}</span>
+                          </div>
+                          <div className="flex justify-between font-bold border-t border-gray-200 pt-2 mt-1">
+                            <span className="text-xs">Summe</span>
+                            <span className="text-primary-700">{eur(d.subtotal)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Gesamtkosten */}
+            {totals && (
+              <div className="card bg-primary-50 border border-primary-200 mb-6">
+                <h3 className="font-bold text-primary-900 text-lg mb-4">Gesamtkosten Projekt</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 text-center">
+                  {[
+                    { label: 'Materialkosten',   val: totals.materialCost },
+                    { label: 'Entsorgungskosten', val: totals.disposalCost },
+                    { label: 'Arbeitskosten',     val: totals.laborCost },
+                  ].map((item) => (
+                    <div key={item.label} className="bg-white rounded-lg p-3 border border-primary-100">
+                      <p className="text-xs text-primary-600 mb-1">{item.label}</p>
+                      <p className="font-semibold text-gray-900">{eur(item.val)}</p>
                     </div>
-                    <div className="flex justify-between font-bold border-t border-gray-200 pt-2 mt-1">
-                      <span className="text-xs">Summe</span>
-                      <span className="text-primary-700">{eur(d.subtotal)}</span>
+                  ))}
+                  {phases && MODULE_PHASES.filter((m) => (phases[m]?.subtotal ?? 0) > 0).map((m) => (
+                    <div key={m} className="bg-white rounded-lg p-3 border border-primary-100">
+                      <p className="text-xs text-primary-600 mb-1">Summe {PHASE_NAMES[m]}</p>
+                      <p className="font-semibold text-gray-900">{eur(phases[m]!.subtotal)}</p>
                     </div>
+                  ))}
+                  <div className="bg-primary-600 text-white rounded-lg p-3">
+                    <p className="text-xs text-primary-200 mb-1">GESAMTSUMME</p>
+                    <p className="font-bold text-xl">{eur(totals.grandTotal)}</p>
+                    <p className="text-xs text-primary-200 mt-1">{totals.totalHours.toFixed(0)} Std. Arbeit</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="mt-3 pt-3 border-t border-primary-200">
+                  {kostenProM2 !== null ? (
+                    <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Kosten pro m²</p>
+                        <p className="text-xs text-blue-400 mt-0.5">
+                          Gesamtwohnfläche: {gesamtwohnflaeche.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m²
+                        </p>
+                      </div>
+                      <p className="text-xl font-bold text-blue-700">{eur(kostenProM2)}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600 italic text-center py-1">
+                      Keine Wohnfläche vorhanden – Kosten pro m² können nicht berechnet werden.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Gesamtkosten */}
-      {totals && (
-        <div className="card bg-primary-50 border border-primary-200 mb-6">
-          <h3 className="font-bold text-primary-900 text-lg mb-4">Gesamtkosten Projekt</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 text-center">
-            {[
-              { label: 'Materialkosten', val: totals.materialCost },
-              { label: 'Entsorgungskosten', val: totals.disposalCost },
-              { label: 'Arbeitskosten', val: totals.laborCost },
-            ].map((item) => (
-              <div key={item.label} className="bg-white rounded-lg p-3 border border-primary-100">
-                <p className="text-xs text-primary-600 mb-1">{item.label}</p>
-                <p className="font-semibold text-gray-900">{eur(item.val)}</p>
+        {/* GIK */}
+        {activeTab === 'gik' && project && summary && (
+          <div role="tabpanel" aria-label="GIK – Gesamtinvestitionskosten">
+            <GikTab
+              project={project}
+              summary={summary}
+              units={excelUnits as import('../types').Unit[]}
+              rooms={excelRooms as import('../types').Room[]}
+              financeSummary={financeSummary ?? null}
+              projectId={projectId!}
+            />
+          </div>
+        )}
+
+        {/* Plan vs. Ist */}
+        {activeTab === 'planvsist' && (
+          <div role="tabpanel" aria-label="Plan vs. Ist">
+            <div className="card mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-900 text-lg">Plan vs. Ist nach Bereich</h3>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const hatPlanwerte = summary?.bereichsVergleich?.some((r) => r.plan !== null) ?? false;
+                    return (
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Planwerte wirklich zurücksetzen? Die eingefrorenen Plankosten werden gelöscht.')) {
+                            loeschenMutation.mutate();
+                          }
+                        }}
+                        disabled={!hatPlanwerte || loeschenMutation.isLoading}
+                        className="btn btn-sm btn-danger"
+                        title={hatPlanwerte ? 'Eingefrorene Planwerte löschen' : 'Keine Planwerte vorhanden'}
+                      >
+                        {loeschenMutation.isLoading ? 'Wird zurückgesetzt…' : 'Planwerte zurücksetzen'}
+                      </button>
+                    );
+                  })()}
+                  {summary?.bereichsVergleich && summary.bereichsVergleich.every((r) => r.plan === null) && (
+                    <button
+                      onClick={() => frierenMutation.mutate()}
+                      disabled={frierenMutation.isLoading}
+                      className="btn btn-sm btn-secondary"
+                      title="Aktuelle Ist-Kosten als Planwerte einfrieren (einmalig)"
+                    >
+                      {frierenMutation.isLoading ? 'Wird eingefroren…' : 'Planwerte jetzt einfrieren'}
+                    </button>
+                  )}
+                </div>
               </div>
-            ))}
-            {/* Modul-Summen */}
-            {phases && MODULE_PHASES.filter((m) => (phases[m]?.subtotal ?? 0) > 0).map((m) => (
-              <div key={m} className="bg-white rounded-lg p-3 border border-primary-100">
-                <p className="text-xs text-primary-600 mb-1">Summe {PHASE_NAMES[m]}</p>
-                <p className="font-semibold text-gray-900">{eur(phases[m]!.subtotal)}</p>
-              </div>
-            ))}
-            <div className="bg-primary-600 text-white rounded-lg p-3">
-              <p className="text-xs text-primary-200 mb-1">GESAMTSUMME</p>
-              <p className="font-bold text-xl">{eur(totals.grandTotal)}</p>
-              <p className="text-xs text-primary-200 mt-1">{totals.totalHours.toFixed(0)} Std. Arbeit</p>
+              <PlanVsIstTabelle rows={summary?.bereichsVergleich ?? []} />
             </div>
           </div>
+        )}
 
-          {/* Kosten pro m² – dynamisch aus Raumflächen berechnet */}
-          <div className="mt-3 pt-3 border-t border-primary-200">
-            {kostenProM2 !== null ? (
-              <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Kosten pro m²</p>
-                  <p className="text-xs text-blue-400 mt-0.5">
-                    Gesamtwohnfläche: {gesamtwohnflaeche.toLocaleString('de-DE', { maximumFractionDigits: 2 })} m²
-                  </p>
-                </div>
-                <p className="text-xl font-bold text-blue-700">{eur(kostenProM2)}</p>
-              </div>
+        {/* Finanzierung */}
+        {activeTab === 'finanzierung' && (
+          <div role="tabpanel" aria-label="Finanzierung">
+            {financeSummary && projectId ? (
+              <FinanceKpiBar fin={financeSummary} projectId={projectId} />
             ) : (
-              <p className="text-xs text-amber-600 italic text-center py-1">
-                Keine Wohnfläche vorhanden – Kosten pro m² können nicht berechnet werden.
-              </p>
+              <div className="card flex flex-col items-center justify-center py-12 gap-3 text-center">
+                <svg className="w-12 h-12 text-gray-200" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75" />
+                </svg>
+                <p className="text-gray-500 font-medium">Finanzierungsparameter noch nicht konfiguriert</p>
+                <Link to={`/projects/${projectId}/finance`} className="btn btn-sm btn-primary mt-2">
+                  Finanzierung einrichten →
+                </Link>
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Plan vs. Ist je Bereich */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900 text-lg">Plan vs. Ist nach Bereich</h3>
-          <div className="flex items-center gap-2">
-            {(() => {
-              const hatPlanwerte = summary?.bereichsVergleich?.some((r) => r.plan !== null) ?? false;
-              return (
-                <button
-                  onClick={() => {
-                    if (window.confirm('Planwerte wirklich zurücksetzen? Die eingefrorenen Plankosten werden gelöscht.')) {
-                      loeschenMutation.mutate();
-                    }
-                  }}
-                  disabled={!hatPlanwerte || loeschenMutation.isLoading}
-                  className="btn btn-sm btn-danger"
-                  title={hatPlanwerte ? 'Eingefrorene Planwerte löschen' : 'Keine Planwerte vorhanden'}
-                >
-                  {loeschenMutation.isLoading ? 'Wird zurückgesetzt…' : 'Planwerte zurücksetzen'}
-                </button>
-              );
-            })()}
-            {summary?.bereichsVergleich && summary.bereichsVergleich.every((r) => r.plan === null) && (
-              <button
-                onClick={() => frierenMutation.mutate()}
-                disabled={frierenMutation.isLoading}
-                className="btn btn-sm btn-secondary"
-                title="Aktuelle Ist-Kosten als Planwerte einfrieren (einmalig)"
-              >
-                {frierenMutation.isLoading ? 'Wird eingefroren…' : 'Planwerte jetzt einfrieren'}
-              </button>
-            )}
-          </div>
-        </div>
-        <PlanVsIstTabelle rows={summary?.bereichsVergleich ?? []} />
+        <div className="pb-12" />
       </div>
-
-      {/* Finanzierungs-KPIs (wenn Parameter konfiguriert) */}
-      {financeSummary && projectId && (
-        <FinanceKpiBar fin={financeSummary} projectId={projectId} />
-      )}
-
-      {/* Hinweis wenn noch keine Finanzierung konfiguriert */}
-      {!financeSummary && (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 flex items-center justify-between text-sm text-gray-400 mb-2">
-          <span>Finanzierungsparameter noch nicht konfiguriert</span>
-          <Link to={`/projects/${projectId}/finance`}
-            className="text-blue-600 hover:text-blue-800 font-medium text-xs">
-            Jetzt einrichten →
-          </Link>
-        </div>
-      )}
-
     </div>
   );
 }
