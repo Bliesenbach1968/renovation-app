@@ -124,6 +124,15 @@ export interface Position {
   updatedBy?: User;
 }
 
+export interface Stellplatz {
+  _id: string;
+  projectId: string;
+  nummer: string;
+  bezeichnung: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Container {
   _id: string;
   projectId: string;

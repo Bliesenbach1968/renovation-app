@@ -416,7 +416,8 @@ const XLSX_PHASE_COLORS: Record<string, string> = {
 
 // ─── GIK (2) helpers (adapted from provided code) ────────────────────────────
 
-type GIKUnit = { type: 'WE' | 'DG'; weCode?: string; title: string; rooms: { name: string; area: number | null }[] };
+const ZIMMER_EXCLUDED = ['bathroom', 'kitchen', 'hallway'];
+type GIKUnit = { type: 'WE' | 'DG'; weCode?: string; title: string; rooms: { name: string; roomType: string; area: number | null }[] };
 
 function gikWeSorter(a: string, b: string) {
   const norm = (s: string) => s.replace(/^WE\s*/i, '');
@@ -442,7 +443,7 @@ function buildGIKUnits(units: import('../types').Unit[], rooms: import('../types
       if (!r.unitId) return false;
       const uid = typeof r.unitId === 'string' ? r.unitId : (r.unitId as import('../types').Unit)._id;
       return uid === u._id;
-    }).map(r => ({ name: r.name, area: r.dimensions?.area ?? null }));
+    }).map(r => ({ name: r.name, roomType: r.type, area: r.dimensions?.area ?? null }));
 
     if (weM) {
       result.push({ type: isDG ? 'DG' : 'WE', weCode: weM[1], title: name, rooms: unitRooms });
@@ -507,11 +508,11 @@ function addGIKSheet(wb: ExcelJSType.Workbook, units: import('../types').Unit[],
 
   for (const u of wes) {
     const totalArea = +u.rooms.reduce((s, r) => s + (r.area ?? 0), 0).toFixed(2);
-    dataRow(ws.addRow([]), [u.weCode ?? 'WE', u.title, totalArea, u.rooms.length, null, null]);
+    dataRow(ws.addRow([]), [u.weCode ?? 'WE', u.title, totalArea, u.rooms.filter(r => !ZIMMER_EXCLUDED.includes(r.roomType)).length, null, null]);
   }
   for (const u of dgs) {
     const totalArea = +u.rooms.reduce((s, r) => s + (r.area ?? 0), 0).toFixed(2);
-    dataRow(ws.addRow([]), ['Dachgeschoss', 'Dachgeschoss', totalArea, u.rooms.length, null, null]);
+    dataRow(ws.addRow([]), ['Dachgeschoss', 'Dachgeschoss', totalArea, u.rooms.filter(r => !ZIMMER_EXCLUDED.includes(r.roomType)).length, null, null]);
   }
 
   // ── Stellplätze section ───────────────────────────────────────────────────
@@ -540,7 +541,7 @@ function addGIK1Sheet(
   allRooms: import('../types').Room[],
   financeSummary: FinanceSummary | null,
 ) {
-  const ws = wb.addWorksheet('GIK (1)', {
+  const ws = wb.addWorksheet('GIK', {
     properties: { defaultColWidth: 16 },
     pageSetup: { paperSize: 9, orientation: 'landscape' as const },
   });
@@ -599,6 +600,15 @@ function addGIK1Sheet(
     const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
     return isNaN(n) ? null : n;
   }
+
+  // ── Projektname ───────────────────────────────────────────────────────────
+  const titleRow = ws.addRow([]);
+  titleRow.height = 24;
+  const titleCell = titleRow.getCell(2);
+  titleCell.value = project.name;
+  titleCell.font  = { bold: true, size: 14, color: { argb: DARK_BG } };
+  ws.mergeCells(titleRow.number, 2, titleRow.number, 7);
+  ws.addRow([]).height = 6;
 
   // ── SECTION A: Gebäudekennzahlen ─────────────────────────────────────────
   ws.addRow([]).height = 4;
@@ -771,7 +781,7 @@ function addGIK1Sheet(
     const festpreis = parseGerman(p.festpreis);
     const unitArea  = +giku.rooms.reduce((s, r) => s + (r.area ?? 0), 0).toFixed(2);
     const erloes    = festpreis ?? (preisQm !== null && unitArea > 0 ? +(preisQm * unitArea).toFixed(2) : null);
-    const zimmer    = giku.rooms.length;
+    const zimmer    = giku.rooms.filter(r => !ZIMMER_EXCLUDED.includes(r.roomType)).length;
 
     totalErlArea  += unitArea;
     totalErloes   += erloes ?? 0;
@@ -850,6 +860,71 @@ function addGIK1Sheet(
     spRow2.getCell(i).font   = { size: 9 };
     spRow2.getCell(i).border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
   });
+
+  // ── SECTION D: Wirtschaftlichkeitsrechnung ────────────────────────────────
+  const gesamtErloes    = +(totalErloes + (spTotal ?? 0)).toFixed(2);
+  const gewinnVerlust   = +(gesamtErloes - knownTotal).toFixed(2);
+  const isProfit        = gewinnVerlust >= 0;
+  const PROFIT_BG       = 'FF1A5C2A';   // dunkelgrün
+  const LOSS_BG         = 'FF8B1A1A';   // dunkelrot
+  const RESULT_BG       = isProfit ? PROFIT_BG : LOSS_BG;
+
+  ws.addRow([]).height = 16;
+  ws.addRow([]).height = 4;
+
+  const wSH = ws.addRow([]); wSH.height = 22;
+  [1, 2, 3, 4, 5, 6].forEach(i => fillDark(wSH.getCell(i)));
+  wSH.getCell(2).value     = 'Wirtschaftlichkeitsrechnung';
+  wSH.getCell(2).font      = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+  wSH.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+
+  ws.addRow([]).height = 4;
+
+  // Gesamterlöse
+  const weRow = ws.addRow([]); weRow.height = 20;
+  weRow.getCell(2).value     = 'Gesamterlöse (WE + GE + Stellplätze)';
+  weRow.getCell(2).font      = { size: 9 };
+  weRow.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+  weRow.getCell(6).value     = gesamtErloes > 0 ? gesamtErloes : null;
+  weRow.getCell(6).numFmt    = EUR_FMT;
+  weRow.getCell(6).font      = { bold: true, size: 9 };
+  weRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'right' };
+  if (!gesamtErloes) weRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+  weRow.getCell(2).border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
+  weRow.getCell(6).border = { bottom: { style: 'hair', color: { argb: HAIR_C } } };
+
+  // Gesamtinvestitionskosten
+  const giRow = ws.addRow([]); giRow.height = 20;
+  giRow.getCell(2).value     = 'Gesamtinvestitionskosten';
+  giRow.getCell(2).font      = { size: 9 };
+  giRow.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+  giRow.getCell(6).value     = knownTotal > 0 ? knownTotal : null;
+  giRow.getCell(6).numFmt    = EUR_FMT;
+  giRow.getCell(6).font      = { bold: true, size: 9 };
+  giRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'right' };
+  if (!knownTotal) giRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_BG } };
+  giRow.getCell(2).border = { bottom: { style: 'thin', color: { argb: BORDER_C } } };
+  giRow.getCell(6).border = { bottom: { style: 'thin', color: { argb: BORDER_C } } };
+
+  ws.addRow([]).height = 4;
+
+  // Ergebnis: Gesamtgewinn / Gesamtverlust
+  const label = isProfit ? 'Gesamtgewinn' : 'Gesamtverlust';
+  const resRow = ws.addRow([]); resRow.height = 28;
+  [1, 2, 3, 4, 5, 6].forEach(i => {
+    resRow.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: RESULT_BG } };
+    resRow.getCell(i).font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+  });
+  resRow.getCell(2).value     = label;
+  resRow.getCell(2).alignment = { vertical: 'middle', indent: 1 };
+  resRow.getCell(6).value     = (gesamtErloes > 0 && knownTotal > 0) ? gewinnVerlust : null;
+  resRow.getCell(6).numFmt    = EUR_FMT;
+  resRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'right' };
+  if (!gesamtErloes || !knownTotal) {
+    resRow.getCell(6).value = 'Erlöse / Kosten unvollständig';
+    resRow.getCell(6).numFmt = '@';
+    resRow.getCell(6).font   = { bold: true, size: 9, italic: true, color: { argb: 'FFFFFFFF' } };
+  }
 }
 
 // ─── Excel-Download (modern styled via ExcelJS) ────────────────────────────────
@@ -1175,9 +1250,6 @@ async function downloadExcel(project: Project, summary: ProjectSummary, allUnits
   } catch (e) {
     console.error('[GIK1] Fehler beim Erstellen:', e);
   }
-
-  // ─── GIK (2) sheet ───────────────────────────────────────────────────────
-  addGIKSheet(wb, allUnits, allRooms, project.anzahlStellplaetze ?? 0);
 
   // ─── Write & trigger download ─────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();

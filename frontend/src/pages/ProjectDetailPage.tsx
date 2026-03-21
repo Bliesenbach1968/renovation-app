@@ -359,7 +359,7 @@ export default function ProjectDetailPage() {
           },
           {
             label: 'Gebäude & Räume',
-            to: `/projects/${id}/building?phase=renovation`,
+            to: `/projects/${id}/gebaeude`,
             icon: (
               <svg viewBox="0 0 64 64" className="w-10 h-10" fill="currentColor">
                 <rect x="10" y="3" width="44" height="55"/>

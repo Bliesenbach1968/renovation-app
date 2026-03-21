@@ -1,5 +1,5 @@
 import client from './client';
-import type { Project, Floor, Unit, Room, Position, Container, Geruest, Kran, ProjectSummary, PositionTemplate } from '../types';
+import type { Project, Floor, Unit, Room, Position, Container, Geruest, Kran, ProjectSummary, PositionTemplate, Stellplatz } from '../types';
 
 // === Projekte ===
 export const getProjects = async (params?: object) => {
@@ -207,3 +207,23 @@ export const updateTemplate = async (id: string, body: Partial<PositionTemplate>
 };
 export const deleteTemplateApi = async (id: string) =>
   client.delete(`/templates/${id}`);
+
+// === Stellplätze ===
+export const getStellplaetze = async (projectId: string) => {
+  const { data } = await client.get(`/projects/${projectId}/stellplaetze`);
+  return data.data as Stellplatz[];
+};
+export const createStellplatz = async (projectId: string, body: { nummer?: string; bezeichnung?: string }) => {
+  const { data } = await client.post(`/projects/${projectId}/stellplaetze`, body);
+  return data.data as Stellplatz;
+};
+export const updateStellplatz = async (projectId: string, id: string, body: { nummer?: string; bezeichnung?: string }) => {
+  const { data } = await client.put(`/projects/${projectId}/stellplaetze/${id}`, body);
+  return data.data as Stellplatz;
+};
+export const deleteStellplatz = async (projectId: string, id: string) =>
+  client.delete(`/projects/${projectId}/stellplaetze/${id}`);
+export const duplicateStellplatz = async (projectId: string, id: string) => {
+  const { data } = await client.post(`/projects/${projectId}/stellplaetze/${id}/duplicate`);
+  return data.data as Stellplatz;
+};

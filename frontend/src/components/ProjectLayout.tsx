@@ -74,7 +74,7 @@ export default function ProjectLayout() {
 
   const tabs: { label: string; to: string; match: (p: string) => boolean }[] = [
     { label: 'Übersicht',        to: base,                            match: (p) => p === base || p === `${base}/edit` },
-    { label: 'Gebäude & Räume',  to: `${base}/building?phase=renovation`, match: (p) => p.startsWith(`${base}/building`) || p.startsWith(`${base}/rooms`) },
+    { label: 'Gebäude & Räume',  to: `${base}/gebaeude`,                  match: (p) => p.startsWith(`${base}/gebaeude`) },
     { label: 'Abrisskosten',     to: `${base}/abrisskosten`,          match: (p) => p.startsWith(`${base}/abrisskosten`) },
     { label: 'Baukosten',        to: `${base}/baukosten`,             match: (p) => p.startsWith(`${base}/baukosten`) },
     { label: 'Baunebenkosten',   to: `${base}/module/baunebenkosten`, match: (p) => p === `${base}/module/baunebenkosten` },

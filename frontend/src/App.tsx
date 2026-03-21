@@ -26,6 +26,7 @@ import VertriebMaterialPage from './pages/VertriebMaterialPage';
 import MaterialbedarfPage from './pages/MaterialbedarfPage';
 import AbrisskotenPage from './pages/AbrisskotenPage';
 import BaukostenPage from './pages/BaukostenPage';
+import GebaeudePage from './pages/GebaeudePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -51,6 +52,7 @@ function AppRoutes() {
           <Route index                              element={<ProjectDetailPage />} />
           <Route path="edit"                        element={<EditProjectPage />} />
           <Route path="building"                    element={<BuildingPage />} />
+          <Route path="gebaeude"                    element={<GebaeudePage />} />
           <Route path="rooms/:roomId"               element={<RoomDetailPage />} />
           <Route path="summary"                     element={<SummaryPage />} />
           <Route path="timeline"                    element={<TimelinePage />} />

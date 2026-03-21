@@ -961,17 +961,9 @@ export default function BuildingPage() {
 
   const usedBereiche = useMemo(() => {
     const extra = Object.keys(bereichCount).filter(b => !allBereicheForPhase.includes(b));
-    if (selectedPhase === 'specialConstruction') {
-      return [...allBereicheForPhase, ...extra];
-    }
-    // Entkernung / Renovierung: nur Bereiche mit Positionen anzeigen
-    const withPositions = allBereicheForPhase.filter(b => bereichCount[b] > 0);
     const extraWithPositions = extra.filter(b => bereichCount[b] > 0);
-    // Fallback: alle anzeigen wenn noch gar keine Positionen angelegt wurden
-    if (withPositions.length === 0 && extraWithPositions.length === 0) {
-      return [...allBereicheForPhase];
-    }
-    return [...withPositions, ...extraWithPositions];
+    // Alle Standard-Bereiche immer anzeigen + extra Bereiche mit Positionen
+    return [...allBereicheForPhase, ...extraWithPositions];
   }, [selectedPhase, allBereicheForPhase, bereichCount]);
 
   const bereiche = usedBereiche;
